@@ -80,3 +80,6 @@ __pycache__/
 credentials.json
 token.json
 "@ | Out-File -FilePath .gitignore -Encoding utf8
+
+!database/*.bak
+!database/*.db
