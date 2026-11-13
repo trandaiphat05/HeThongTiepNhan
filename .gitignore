@@ -1,0 +1,82 @@
+# ==========================================
+# GITIGNORE - DỰ ÁN HỆ THỐNG TIẾP NHẬN & ĐIỀU PHỐI ĐƠN THƯ
+# UBND TỈNH ĐỒNG NAI
+# ==========================================
+
+# 1. Biến môi trường & Khóa bảo mật (Bắt buộc chặn tuyệt đối)
+.env
+.env.*
+*.env
+!.env.example
+!*/.env.example
+credentials.json
+token.json
+client_secret*.json
+
+# 2. Cơ sở dữ liệu SQLite / Local Database
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+
+# 3. Phân hệ Node.js / Frontend / Next.js
+node_modules/
+*/node_modules/
+.next/
+dist/
+build/
+.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 4. Phân hệ Python / Virtual Environment
+venv/
+.venv/
+env/
+ENV/
+*/venv/
+*/.venv/
+__pycache__/
+*/__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+
+# 5. IDE, Công cụ & Hệ điều hành
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 6. File tạm, Thư mục upload & Log runtime
+*.log
+backend_tunnel.log
+backend/uploads/*
+!backend/uploads/.gitkeep
+uploads/*
+!uploads/.gitkeep
+scratch/
+
+@"
+node_modules/
+.next/
+venv/
+.venv/
+__pycache__/
+.env
+.env.*
+*.sqlite3
+*.db
+credentials.json
+token.json
+"@ | Out-File -FilePath .gitignore -Encoding utf8

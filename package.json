@@ -1,0 +1,14 @@
+{
+  "name": "dautruongai-dongnai-root",
+  "version": "1.0.0",
+  "description": "Hệ thống Tiếp nhận & Điều phối Đơn thư Trí tuệ Nhân tạo - Tỉnh Đồng Nai",
+  "scripts": {
+    "start": "cmd.exe /c run.bat",
+    "stop": "cmd.exe /c stop.bat",
+    "dev:be": "cd backend && .\\venv\\Scripts\\python.exe -m uvicorn main:app --reload --host 0.0.0.0 --port 8000",
+    "dev:fe": "cd frontend && npm run dev",
+    "test:e2e": "backend\\venv\\Scripts\\python.exe -u tests\\test_e2e_full_flow.py",
+    "test:govtech": "backend\\venv\\Scripts\\python.exe backend\\test_govtech_standards.py"
+  }
+}
+
