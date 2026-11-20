@@ -1,0 +1,57 @@
+{
+  "console_errors": [],
+  "console_warnings": [],
+  "page_errors": [],
+  "http_errors": [],
+  "test_cases": [
+    {
+      "code": "CIT-01",
+      "title": "Xóa bỏ 100% Nút Camera & Thuộc tính Capture",
+      "status": "PASS",
+      "details": "0 nút camera, 0 thuộc tính capture trong DOM"
+    },
+    {
+      "code": "CIT-02",
+      "title": "Khung tải ảnh Full-Width duy nhất chuẩn Gmail",
+      "status": "PASS",
+      "details": "1 upload box duy nhất, 1 file input multiple"
+    },
+    {
+      "code": "CIT-03",
+      "title": "Gửi đơn thư thành công & Nhận mã biên nhận",
+      "status": "FAIL",
+      "details": "Không lấy được mã hồ sơ sau submit"
+    },
+    {
+      "code": "CIT-MOB-01",
+      "title": "Giao diện Công dân trên Mobile (390x844)",
+      "status": "FAIL",
+      "details": "Khung tải ảnh không tìm thấy trên mobile"
+    },
+    {
+      "code": "OFF-01",
+      "title": "F5 Persistence: Đánh dấu sao ưu tiên (Star Toggle)",
+      "status": "INFO",
+      "details": "Hộp thư rỗng hoặc không có nút sao"
+    },
+    {
+      "code": "OFF-03",
+      "title": "F5 Persistence: Chuyển tuyến hồ sơ (Reassign)",
+      "status": "INFO",
+      "details": "Nút chuyển tuyến không xuất hiện trên hồ sơ này"
+    },
+    {
+      "code": "OFF-MOB-01",
+      "title": "Giao diện Cán bộ trên Mobile (390x844)",
+      "status": "PASS",
+      "details": "Màn hình Officer Workspace co giãn linh hoạt trên mobile"
+    },
+    {
+      "code": "ADM-MOB-01",
+      "title": "Giao diện Admin Dashboard trên Mobile (390x844)",
+      "status": "PASS",
+      "details": "Dashboard hiển thị đầy đủ, không vỡ layout"
+    }
+  ],
+  "f5_persistence_checks": {}
+}

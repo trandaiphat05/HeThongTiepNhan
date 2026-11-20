@@ -1,14 +1,23 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
-import Header from './components/Header';
-import Footer from './components/Footer';
+import GmailAppShell from './components/layout/GmailAppShell';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './features/auth/RegisterPage';
 import CitizenPortal from './features/citizen/CitizenPortal';
-import OfficerWorkspace from './features/officer/OfficerWorkspace';
-import AdminDashboard from './features/admin/AdminDashboard';
+
+// Lazy load heavy staff/admin workspaces for bundle optimization
+const OfficerWorkspace = lazy(() => import('./features/officer/OfficerWorkspace'));
+const AdminDashboard = lazy(() => import('./features/admin/AdminDashboard'));
+
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center min-h-[400px]">
+      <div className="w-8 h-8 border-3 border-[#0B57D0] border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
 
 function AppContent() {
   const location = useLocation();
@@ -24,12 +33,8 @@ function AppContent() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gov-slate-bg font-sans text-gov-slate-text">
-      {/* Header Cố Định Chứa Navigation Chuẩn Hành Chính */}
-      <Header />
-
-      {/* Vùng Định Tuyến Nội Dung Được Bảo Vệ (RBAC) */}
-      <main className="flex-1">
+    <GmailAppShell>
+      <Suspense fallback={<PageLoader />}>
         <Routes>
           {/* 1. Route Cổng Người Dân & Quét Đơn (Cho phép mọi role đã đăng nhập nhờ kế thừa: CITIZEN) */}
           <Route
@@ -61,14 +66,21 @@ function AppContent() {
             }
           />
 
-          {/* Fallback cho các đường dẫn lạ về trang chủ */}
+          {/* 4. Tra cứu mã hồ sơ (Mở phân hệ Tra cứu trong Cổng công dân) */}
+          <Route
+            path="/tracking"
+            element={
+              <ProtectedRoute allowedRoles={['CITIZEN']}>
+                <CitizenPortal initialTab="lookup" />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </main>
-
-      {/* Chân Trang Hành Chính */}
-      <Footer />
-    </div>
+      </Suspense>
+    </GmailAppShell>
   );
 }
 
@@ -77,10 +89,8 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          {/* Đường dẫn đăng nhập và đăng ký công khai */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
-          {/* Các tuyến đường chính */}
           <Route path="/*" element={<AppContent />} />
         </Routes>
       </AuthProvider>

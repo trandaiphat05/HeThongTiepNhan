@@ -103,6 +103,7 @@ app.include_router(rag_router)
 
 # Endpoint kiểm tra sức khỏe hệ thống
 @app.get("/health", tags=["Hệ Thống"])
+@app.get("/api/health", tags=["Hệ Thống"])
 def health_check():
     """Kiểm tra tình trạng hoạt động của API Server."""
     return {
@@ -116,4 +117,7 @@ def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    base_backend_dir = os.path.dirname(os.path.abspath(__file__))
+    if base_backend_dir not in sys.path:
+        sys.path.insert(0, base_backend_dir)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, app_dir=base_backend_dir)

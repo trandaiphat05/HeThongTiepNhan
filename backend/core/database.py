@@ -6,6 +6,7 @@ Tích hợp trực tiếp với modules.database (SQL Server 2025 Express)
 import os
 import json
 import logging
+from datetime import datetime
 from core.config import BASE_DIR
 from modules.database.connection import engine, SessionLocal, Base, get_db, USE_SQLITE
 from modules.database.models import Department, User, Ticket, AIResult, RAGDoc
@@ -22,11 +23,15 @@ def ensure_database_schema(eng):
             if dialect == "mssql":
                 statements = [
                     "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('users') AND name = 'email') ALTER TABLE users ADD email NVARCHAR(100) NULL;",
+                    "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('users') AND name = 'officer_code') ALTER TABLE users ADD officer_code NVARCHAR(50) NULL;",
+                    "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('users') AND name = 'phone') ALTER TABLE users ADD phone NVARCHAR(20) NULL;",
+                    "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('users') AND name = 'admin_note') ALTER TABLE users ADD admin_note NVARCHAR(MAX) NULL;",
                     "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('users') AND name = 'gmail_account') ALTER TABLE users ADD gmail_account NVARCHAR(100) NULL;",
                     "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('users') AND name = 'gmail_app_password') ALTER TABLE users ADD gmail_app_password NVARCHAR(255) NULL;",
                     "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('users') AND name = 'last_synced_at') ALTER TABLE users ADD last_synced_at DATETIME NULL;",
                     "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('tickets') AND name = 'user_id') ALTER TABLE tickets ADD user_id INT NULL;",
                     "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('tickets') AND name = 'original_message_id') ALTER TABLE tickets ADD original_message_id NVARCHAR(255) NULL;",
+                    "IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('tickets') AND name = 'is_starred') ALTER TABLE tickets ADD is_starred BIT DEFAULT 0;",
                 ]
                 for stmt in statements:
                     try:
@@ -36,11 +41,15 @@ def ensure_database_schema(eng):
             else:
                 cols = [
                     ("users", "email", "TEXT"),
+                    ("users", "officer_code", "TEXT"),
+                    ("users", "phone", "TEXT"),
+                    ("users", "admin_note", "TEXT"),
                     ("users", "gmail_account", "TEXT"),
                     ("users", "gmail_app_password", "TEXT"),
                     ("users", "last_synced_at", "DATETIME"),
                     ("tickets", "user_id", "INTEGER"),
                     ("tickets", "original_message_id", "TEXT"),
+                    ("tickets", "is_starred", "BOOLEAN DEFAULT 0"),
                 ]
                 for table, col, col_type in cols:
                     try:
@@ -52,49 +61,25 @@ def ensure_database_schema(eng):
         logger.warning(f"Lỗi kiểm tra schema CSDL: {e}")
 
 
-DEPT_NAMES = {
-    "SO_GTVT": "Sở Giao thông Vận tải",
-    "SO_TNMT": "Sở Tài nguyên & Môi trường",
-    "SO_XD": "Sở Xây dựng",
-    "SO_XAYDUNG": "Sở Xây dựng",
-    "SO_YTE": "Sở Y tế",
-    "SO_YT": "Sở Y tế",
-    "SO_GDDT": "Sở Giáo dục và Đào tạo",
-    "SO_LDTBXH": "Sở Lao động - Thương binh và Xã hội",
-    "CONG_AN_TINH": "Công an Tỉnh Đồng Nai",
-    "UBND_CAP_HUYEN": "UBND Cấp Huyện / TP",
-    "UBND_TINH": "UBND Tỉnh Đồng Nai",
-    "REQUIRE_HUMAN_REVIEW": "Cần Admin Phân Luồng",
-}
-
-dept_header_map = {
-    "SO_GTVT": ("SỞ GIAO THÔNG VẬN TẢI TỈNH ĐỒNG NAI", "Số: .../TB-SGTVT"),
-    "SO_TNMT": ("SỞ TÀI NGUYÊN VÀ MÔI TRƯỜNG TỈNH ĐỒNG NAI", "Số: .../TB-STNMT"),
-    "SO_XD": ("SỞ XÂY DỰNG TỈNH ĐỒNG NAI", "Số: .../TB-SXD"),
-    "SO_XAYDUNG": ("SỞ XÂY DỰNG TỈNH ĐỒNG NAI", "Số: .../TB-SXD"),
-    "SO_YTE": ("SỞ Y TẾ TỈNH ĐỒNG NAI", "Số: .../TB-SYT"),
-    "SO_YT": ("SỞ Y TẾ TỈNH ĐỒNG NAI", "Số: .../TB-SYT"),
-    "SO_GDDT": ("SỞ GIÁO DỤC VÀ ĐÀO TẠO TỈNH ĐỒNG NAI", "Số: .../TB-SGDDT"),
-    "SO_LDTBXH": ("SỞ LAO ĐỘNG - THƯƠNG BINH VÀ XÃ HỘI TỈNH ĐỒNG NAI", "Số: .../TB-SLDTBXH"),
-    "CONG_AN_TINH": ("CÔNG AN TỈNH ĐỒNG NAI", "Số: .../TB-CAT"),
-    "UBND_TINH": ("ỦY BAN NHÂN DÂN TỈNH ĐỒNG NAI", "Số: .../TB-UBND"),
-    "UBND_CAP_HUYEN": ("ỦY BAN NHÂN DÂN CẤP HUYỆN / TP", "Số: .../TB-UBND"),
-    "REQUIRE_HUMAN_REVIEW": ("TỔ TIẾP NHẬN & ĐIỀU PHỐI ĐƠN THƯ TỈNH ĐỒNG NAI", "Số: .../TB-TĐP"),
-}
+from core.departments import (
+    DEPT_NAMES,
+    DEPT_HEADER_MAP as dept_header_map,
+    CANONICAL_DEPARTMENTS,
+    normalize_dept_code,
+    get_department_name,
+)
 
 all_default_depts = [
-    Department(dept_code=u"SO_GTVT", dept_name=u"Sở Giao thông Vận tải", email_contact=u"sgtvt@dongnai.gov.vn"),
-    Department(dept_code=u"SO_TNMT", dept_name=u"Sở Tài nguyên & Môi trường", email_contact=u"stnmt@dongnai.gov.vn"),
-    Department(dept_code=u"SO_XD", dept_name=u"Sở Xây dựng", email_contact=u"sxd@dongnai.gov.vn"),
-    Department(dept_code=u"SO_XAYDUNG", dept_name=u"Sở Xây dựng", email_contact=u"sxd@dongnai.gov.vn"),
-    Department(dept_code=u"SO_YTE", dept_name=u"Sở Y tế", email_contact=u"syte@dongnai.gov.vn"),
-    Department(dept_code=u"SO_YT", dept_name=u"Sở Y tế", email_contact=u"syte@dongnai.gov.vn"),
-    Department(dept_code=u"SO_GDDT", dept_name=u"Sở Giáo dục và Đào tạo", email_contact=u"sgddt@dongnai.gov.vn"),
-    Department(dept_code=u"SO_LDTBXH", dept_name=u"Sở Lao động - Thương binh và Xã hội", email_contact=u"sldtbxh@dongnai.gov.vn"),
-    Department(dept_code=u"CONG_AN_TINH", dept_name=u"Công an Tỉnh Đồng Nai", email_contact=u"congan@dongnai.gov.vn"),
-    Department(dept_code=u"UBND_CAP_HUYEN", dept_name=u"UBND Cấp Huyện / TP", email_contact=u"ubnd.bienhoa@dongnai.gov.vn"),
-    Department(dept_code=u"UBND_TINH", dept_name=u"UBND Tỉnh Đồng Nai", email_contact=u"ubnd@dongnai.gov.vn"),
-    Department(dept_code=u"REQUIRE_HUMAN_REVIEW", dept_name=u"Cần Admin Phân Luồng", email_contact=u"admin.donthu@dongnai.gov.vn"),
+    Department(
+        dept_code=d["code"],
+        dept_name=d["name"],
+        email_contact=d["email"]
+    )
+    for d in CANONICAL_DEPARTMENTS
+] + [
+    # Thêm alias để tương thích ngược tuyệt đối
+    Department(dept_code="SO_XAYDUNG", dept_name="Sở Xây dựng", email_contact="sxd@dongnai.gov.vn"),
+    Department(dept_code="SO_YT", dept_name="Sở Y tế", email_contact="syte@dongnai.gov.vn"),
 ]
 
 
@@ -195,7 +180,7 @@ def init_db(clean_existing: bool = False):
     - Tự động phát hiện và dọn dẹp nếu phát hiện dữ liệu cũ bị biến đổi ký tự thành dấu '?'.
     - Đảm bảo toàn bộ chuỗi tiếng Việt nạp vào có tiền tố Unicode u"..." chuẩn.
     """
-    # 1. Tự động sinh bảng nếu chưa có trong SQL Server với kiểu NVARCHAR
+    # Khởi tạo schema bảng trên CSDL
     Base.metadata.create_all(bind=engine)
     ensure_database_schema(engine)
     logger.info("✓ Base.metadata.create_all(bind=engine) đã thực thi trên SQL Server.")
@@ -219,7 +204,7 @@ def init_db(clean_existing: bool = False):
             db.commit()
             logger.info("✓ Đã dọn dẹp sạch sẽ các bản ghi cũ.")
 
-        # 2. Nạp danh mục phòng ban chuẩn với tiền tố Unicode u"..."
+        # Đồng bộ danh mục phòng ban mặc định
         existing_dept_codes = {d.dept_code for d in db.query(Department).all()}
         depts_to_add = [d for d in all_default_depts if d.dept_code not in existing_dept_codes]
         if depts_to_add:
@@ -227,7 +212,7 @@ def init_db(clean_existing: bool = False):
             db.commit()
             logger.info(f"✓ Đã đồng bộ danh mục {len(depts_to_add)} Sở/Ban/Ngành chuẩn Unicode vào SQL Server.")
 
-        # 3. Nạp danh sách người dùng mặc định và đảm bảo tài khoản đang active
+        # Đồng bộ danh sách người dùng mặc định
         default_users = [
             User(username=u"admin", password_hash=u"admin123", full_name=u"Quản trị viên Hệ thống", role=u"ADMIN", dept_code=u"ALL", is_active=True),
             User(username=u"admin_tinh", password_hash=u"admin123", full_name=u"Nguyễn Văn Minh", role=u"ADMIN", dept_code=u"UBND_TINH", is_active=True),
@@ -261,7 +246,7 @@ def init_db(clean_existing: bool = False):
         db.commit()
         logger.info("✓ Đã đồng bộ danh sách tài khoản Cán bộ 7 Sở, Admin & Công dân active chuẩn Unicode vào CSDL.")
 
-        # 4. Nạp hồ sơ mẫu ban đầu nếu rỗng với tiền tố Unicode u"..."
+        # Nạp hồ sơ mẫu ban đầu nếu CSDL chưa có dữ liệu
         if db.query(Ticket).count() == 0:
             today_str = datetime.now().strftime("%Y%m%d")
             ticket1 = Ticket(
@@ -302,7 +287,7 @@ def init_db(clean_existing: bool = False):
                 citizen_name=u"Trần Thị Mai",
                 citizen_phone=u"0988765432",
                 citizen_email=u"mai.tran@gmail.com",
-                raw_text=u"Đơn giấy chụp tại Một cửa: Nhà hàng xóm ở KP4 phường Trảng Dài tối nào cũng mở loa kẹo kéo hát karaoke đến 1-2h sáng gây ồn ào không ngủ được.",
+                raw_text=u"Đơn giấy tiếp nhận tại Ban Tiếp công dân Tỉnh: Nhà hàng xóm ở KP4 phường Trảng Dài tối nào cũng mở loa kẹo kéo hát karaoke đến 1-2h sáng gây ồn ào không ngủ được.",
                 image_url=u"https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=800&auto=format&fit=crop&q=80",
                 status=u"ROUTED",
                 dept_code=u"UBND_CAP_HUYEN",
@@ -363,13 +348,20 @@ def init_db(clean_existing: bool = False):
 
             db.commit()
             logger.info("✓ Đã nạp các đơn thư mẫu chuẩn Unicode tiếng Việt vào SQL Server.")
+
+            # Nạp 2 hồ sơ demo chuẩn mực (ĐN-20261104-001 & ĐN-20261104-002) nếu chưa có
+            try:
+                from seed_demo_tickets import seed_demo_data
+                seed_demo_data()
+            except Exception as seed_err:
+                logger.warning(f"Không thể nạp demo tickets: {seed_err}")
     except Exception as e:
         logger.error(f"Lỗi khởi tạo dữ liệu mẫu: {e}")
         db.rollback()
     finally:
         db.close()
 
-    # 5. Đồng bộ luôn CSDL SQLite phụ trợ backend/dongnai_civic.db
+    # Đồng bộ CSDL SQLite phụ trợ
     sqlite_path = os.path.join(BASE_DIR, "dongnai_civic.db")
     seed_sqlite_database(sqlite_path)
 

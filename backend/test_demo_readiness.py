@@ -28,12 +28,18 @@ def run_tests():
         ("admin", "admin123", "ADMIN", "ALL"),
         ("congdan1", "citizen123", "CITIZEN", "CITIZEN"),
     ]
+    officer_token = None
+    admin_token = None
     for username, password, expected_role, expected_dept in credentials:
         res = client.post("/api/auth/login", json={"username": username, "password": password})
         assert res.status_code == 200, f"Đăng nhập thất bại: {res.text}"
         data = res.json()
         user = data.get("user", {})
         token = data.get("access_token")
+        if username == "canbo_gtvt":
+            officer_token = token
+        elif username == "admin":
+            admin_token = token
         assert user.get("role") == expected_role, f"Role sai: {user.get('role')} != {expected_role}"
         print(f"  ✓ Đăng nhập [{username}]: Token hợp lệ, Role = {user.get('role')}, Dept = {user.get('department_code')}")
 
@@ -52,7 +58,8 @@ def run_tests():
 
     # 3. Kiểm tra danh sách hồ sơ (/api/tickets)
     print("\n[3] Kiểm tra API danh sách hồ sơ thẩm định (/api/tickets):")
-    res = client.get("/api/tickets")
+    headers = {"Authorization": f"Bearer {admin_token}"} if admin_token else {}
+    res = client.get("/api/tickets", headers=headers)
     assert res.status_code == 200
     tickets = res.json()
     print(f"  ✓ Tổng số hồ sơ trong CSDL: {len(tickets)} hồ sơ")

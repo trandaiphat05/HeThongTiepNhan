@@ -4,11 +4,13 @@ Cung cấp API nạp tài liệu (PDF/DOCX/TXT), tra cứu danh mục và xóa �
 """
 
 from typing import Optional, List, Dict, Any
+import os
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from core.database import get_db
+from modules.auth.deps import require_admin
 from modules.rag.service import (
     ingest_document,
     list_rag_docs,
@@ -17,6 +19,9 @@ from modules.rag.service import (
 )
 
 router = APIRouter(tags=["Kho Tri Thức Pháp Luật RAG"])
+
+ALLOWED_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt", ".md"}
+MAX_FILE_SIZE = 15 * 1024 * 1024  # 15MB
 
 
 class SearchRequest(BaseModel):
@@ -32,10 +37,11 @@ async def ingest_legal_document(
     category: Optional[str] = Form("CHUNG"),
     content: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
+    current_admin: dict = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
     """
-    Nạp văn bản quy phạm pháp luật vào hệ thống.
+    Nạp văn bản quy phạm pháp luật vào hệ thống (Chỉ dành cho Root Admin).
     Hỗ trợ tệp đính kèm (PDF, DOCX, TXT, MD) hoặc văn bản nhập trực tiếp.
     Hệ thống tự động cắt đoạn (chunking) và lưu vào SQL Server.
     """
@@ -43,7 +49,18 @@ async def ingest_legal_document(
     filename = None
     if file and file.filename:
         filename = file.filename
+        ext = os.path.splitext(filename)[1].lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Định dạng tệp '{ext}' không được hỗ trợ. Chỉ chấp nhận các định dạng văn bản quy chuẩn: .pdf, .docx, .doc, .txt, .md"
+            )
         file_bytes = await file.read()
+        if len(file_bytes) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Dung lượng tệp vượt quá giới hạn tối đa cho phép (15MB)."
+            )
 
     try:
         result = ingest_document(
@@ -68,13 +85,15 @@ async def admin_rag_alias(
     category: Optional[str] = Form("CHUNG"),
     content: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
+    current_admin: dict = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
-    return await ingest_legal_document(title, category, content, file, db)
+    return await ingest_legal_document(title, category, content, file, current_admin, db)
 
 
-# 3. DANH SÁCH CÁC ĐOẠN LUẬT TRONG KHO (GET /api/rag/docs)
+# 3. DANH SÁCH CÁC ĐOẠN LUẬT TRONG KHO (GET /api/rag/docs & GET /api/rag/documents)
 @router.get("/api/rag/docs")
+@router.get("/api/rag/documents")
 def get_rag_documents(
     search: Optional[str] = Query(None),
     category: Optional[str] = Query("ALL"),
@@ -94,8 +113,12 @@ def get_rag_documents(
 
 # 4. XÓA ĐOẠN LUẬT (DELETE /api/rag/docs/{doc_id})
 @router.delete("/api/rag/docs/{doc_id}")
-def remove_rag_doc(doc_id: int, db: Session = Depends(get_db)):
-    """Xóa một đoạn điều luật khỏi kho RAG."""
+def remove_rag_doc(
+    doc_id: int,
+    current_admin: dict = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Xóa một đoạn điều luật khỏi kho RAG (Chỉ dành cho Root Admin)."""
     success = delete_rag_doc(db, doc_id)
     if not success:
         raise HTTPException(status_code=404, detail=f"Không tìm thấy đoạn luật với ID {doc_id}")

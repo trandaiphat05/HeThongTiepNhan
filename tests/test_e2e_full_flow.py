@@ -54,7 +54,7 @@ def run_e2e_test():
     print(" BẮT ĐẦU KIỂM THỬ TỰ ĐỘNG E2E TOÀN DIỆN (PLAYWRIGHT & SQL SERVER)", flush=True)
     print("=" * 75, flush=True)
 
-    base_url = "http://localhost:5173"
+    base_url = "http://localhost:3000"
     results = {}
     created_ticket_code = None
 

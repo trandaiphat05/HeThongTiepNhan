@@ -31,9 +31,9 @@ from modules.auth.service import (
     approve_officer_user,
     reject_officer_user,
     link_user_gmail,
-    get_user_gmail_status
+    get_user_gmail_status,
+    disconnect_user_gmail
 )
-from modules.notifications.email_worker import sync_real_gmail_inbox
 from modules.auth.deps import (
     get_current_user,
     require_role,
@@ -109,6 +109,15 @@ def gmail_status(
     return get_user_gmail_status(db, user)
 
 
+@auth_router.post("/disconnect-gmail")
+def disconnect_gmail(
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Hủy liên kết tài khoản Gmail."""
+    return disconnect_user_gmail(db, user)
+
+
 @auth_router.post("/sync-gmail")
 def sync_gmail(
     req: Optional[SyncGmailRequest] = None,
@@ -140,6 +149,8 @@ def sync_gmail(
         )
 
     max_emails = req.max_emails if req and req.max_emails else 5
+    from modules.notifications.email_worker import sync_real_gmail_inbox
+
     return sync_real_gmail_inbox(
         user_id=user.get("user_id"),
         email_account=email_account,
@@ -196,9 +207,13 @@ def add_user(req: UserCreateRequest, db: Session = Depends(get_db)):
 
 
 @admin_users_router.put("/{user_id}/toggle")
-def toggle_user(user_id: int, db: Session = Depends(get_db)):
+def toggle_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
     """Khóa hoặc kích hoạt lại tài khoản cán bộ."""
-    new_state = toggle_user_status(db, user_id)
+    new_state = toggle_user_status(db, user_id, current_user=current_user)
     return {
         "success": True,
         "user_id": user_id,
@@ -232,9 +247,13 @@ def approve_user(user_id: int, db: Session = Depends(get_db)):
 @admin_users_router.put("/{user_id}/reject")
 @admin_users_router.delete("/{user_id}/reject")
 @admin_users_router.delete("/{user_id}")
-def reject_user(user_id: int, db: Session = Depends(get_db)):
+def reject_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
     """Từ chối và hủy bỏ yêu cầu đăng ký tài khoản cán bộ."""
-    return reject_officer_user(db, user_id)
+    return reject_officer_user(db, user_id, current_user=current_user)
 
 
 # Router mặc định để giữ tương thích

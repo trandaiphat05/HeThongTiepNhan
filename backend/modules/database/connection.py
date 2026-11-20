@@ -22,7 +22,7 @@ DATABASE_URL = os.getenv(
 engine = None
 USE_SQLITE = False
 
-# 1. Khởi tạo engine kết nối Microsoft SQL Server
+# Khởi tạo engine kết nối Microsoft SQL Server hoặc SQLite dự phòng
 try:
     engine = create_engine(
         DATABASE_URL,
@@ -43,12 +43,12 @@ except Exception as e:
     engine = create_engine(f"sqlite:///{DB_PATH}", connect_args={"check_same_thread": False})
     USE_SQLITE = True
 
-# 2. Khởi tạo SessionLocal và Base ORM
+# Khởi tạo SessionLocal và Base ORM
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 
-# 3. Dependency get_db cung cấp Session cho FastAPI Router
+# Dependency get_db cung cấp Session cho FastAPI Router
 def get_db():
     """Dependency cung cấp Session Database và tự động đóng sau khi hoàn tất request."""
     db = SessionLocal()

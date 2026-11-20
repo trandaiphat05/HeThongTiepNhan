@@ -97,6 +97,136 @@ def decode_mime_text(header_value: Optional[str]) -> str:
         return str(header_value).strip()
 
 
+def normalize_email_body(text: str) -> str:
+    """
+    Chuẩn hóa nội dung email:
+    - Gộp các dòng bị ngắt dòng mềm (soft wraps) ở giữa câu thành dấu cách.
+    - Giữ nguyên các đoạn văn cách nhau bằng 2 dấu xuống dòng (\n\n).
+    """
+    if not text:
+        return ""
+    import re
+    # Chuẩn hóa xuống dòng carriage return
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n").strip()
+    # Tách thành các đoạn văn riêng biệt (phân tách bởi 2 hoặc nhiều dấu \n)
+    raw_paragraphs = [p.strip() for p in re.split(r'\n{2,}', normalized) if p.strip()]
+    cleaned_paragraphs = []
+    for p in raw_paragraphs:
+        lines = [line.strip() for line in p.split("\n") if line.strip()]
+        merged_lines = []
+        for line in lines:
+            if not merged_lines:
+                merged_lines.append(line)
+            else:
+                prev = merged_lines[-1]
+                # Nếu dòng trước kết thúc bằng dấu chấm, chấm than, hỏi, hai chấm hoặc dòng hiện tại là gạch đầu dòng
+                if prev.endswith((".", "!", "?", ":")) or line.startswith(("-", "*", "+", "•", "1.", "2.", "3.", "4.", "5.")):
+                    merged_lines.append(line)
+                else:
+                    merged_lines[-1] = f"{prev} {line}"
+        cleaned_paragraphs.append("\n".join(merged_lines))
+    return "\n\n".join(cleaned_paragraphs)
+
+
+def create_email_a4_document(
+    tracking_code: str,
+    citizen_name: str,
+    citizen_email: str,
+    subject: str,
+    body_text: str,
+    created_at: Optional[datetime] = None
+) -> str:
+    """
+    Tạo tài liệu scan A4 (800x1100) chuẩn hành chính cho đơn thư gửi qua Gmail.
+    Đảm bảo một email ngắn 6 đoạn văn sẽ nằm gọn gàng trọn vẹn trong 1 trang giấy mà không bị tràn sang Trang 2.
+    """
+    from PIL import Image, ImageDraw, ImageFont
+    import textwrap
+
+    os.makedirs(ATTACHMENTS_DIR, exist_ok=True)
+    safe_code = tracking_code.replace("-", "_")
+    file_path = os.path.join(ATTACHMENTS_DIR, f"{safe_code}_a4.jpg")
+
+    width, height = 800, 1100
+    img = Image.new("RGB", (width, height), color=(253, 252, 248))
+    draw = ImageDraw.Draw(img)
+
+    # Viền trang trí tài liệu A4
+    draw.rectangle([(20, 20), (width - 20, height - 20)], outline=(210, 205, 195), width=2)
+    draw.rectangle([(26, 26), (width - 26, height - 26)], outline=(230, 225, 215), width=1)
+
+    # Nạp font chữ Times New Roman hoặc Arial có sẵn trên Windows
+    font_bold_path = "C:/Windows/Fonts/timesbd.ttf" if os.path.exists("C:/Windows/Fonts/timesbd.ttf") else ("C:/Windows/Fonts/arialbd.ttf" if os.path.exists("C:/Windows/Fonts/arialbd.ttf") else None)
+    font_regular_path = "C:/Windows/Fonts/times.ttf" if os.path.exists("C:/Windows/Fonts/times.ttf") else ("C:/Windows/Fonts/arial.ttf" if os.path.exists("C:/Windows/Fonts/arial.ttf") else None)
+
+    try:
+        font_header = ImageFont.truetype(font_bold_path, 15) if font_bold_path else ImageFont.load_default()
+        font_sub = ImageFont.truetype(font_regular_path, 13) if font_regular_path else ImageFont.load_default()
+        font_title = ImageFont.truetype(font_bold_path, 17) if font_bold_path else ImageFont.load_default()
+        font_meta_bold = ImageFont.truetype(font_bold_path, 12) if font_bold_path else ImageFont.load_default()
+        font_meta = ImageFont.truetype(font_regular_path, 12) if font_regular_path else ImageFont.load_default()
+        font_body = ImageFont.truetype(font_regular_path, 13) if font_regular_path else ImageFont.load_default()
+        font_stamp = ImageFont.truetype(font_bold_path, 12) if font_bold_path else ImageFont.load_default()
+    except Exception:
+        font_header = font_sub = font_title = font_meta_bold = font_meta = font_body = font_stamp = ImageFont.load_default()
+
+    # Quốc hiệu & Tiêu ngữ
+    draw.text((width // 2, 50), "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM", fill=(20, 30, 50), anchor="mm", font=font_header)
+    draw.text((width // 2, 72), "Độc lập - Tự do - Hạnh phúc", fill=(20, 30, 50), anchor="mm", font=font_sub)
+    draw.line([(width // 2 - 110, 85), (width // 2 + 110, 85)], fill=(50, 60, 70), width=1)
+
+    # Tiêu đề hồ sơ
+    draw.text((width // 2, 125), "PHIẾU TIẾP NHẬN PHẢN ÁNH, ĐƠN THƯ CÔNG VỤ", fill=(180, 30, 30), anchor="mm", font=font_title)
+    clean_subj = subject[:75] + ("..." if len(subject) > 75 else "")
+    draw.text((width // 2, 150), f"V/v: {clean_subj}", fill=(40, 50, 70), anchor="mm", font=font_sub)
+    draw.line([(60, 170), (width - 60, 170)], fill=(200, 195, 185), width=2)
+
+    # Khung thông tin biên nhận
+    dt_str = (created_at or datetime.now()).strftime("%H:%M:%S ngày %d/%m/%Y")
+    draw.text((60, 185), "Mã tra cứu:", fill=(30, 41, 59), font=font_meta_bold)
+    draw.text((150, 185), tracking_code, fill=(11, 87, 208), font=font_meta_bold)
+    draw.text((450, 185), "Thời gian gửi:", fill=(30, 41, 59), font=font_meta_bold)
+    draw.text((545, 185), dt_str, fill=(71, 85, 105), font=font_meta)
+
+    draw.text((60, 208), "Người gửi:", fill=(30, 41, 59), font=font_meta_bold)
+    draw.text((150, 208), citizen_name or "Công dân", fill=(15, 23, 42), font=font_meta)
+    draw.text((450, 208), "Email công dân:", fill=(30, 41, 59), font=font_meta_bold)
+    draw.text((545, 208), citizen_email or "---", fill=(71, 85, 105), font=font_meta)
+
+    draw.line([(60, 230), (width - 60, 230)], fill=(226, 232, 240), width=1)
+    draw.text((60, 245), "NỘI DUNG NGUYÊN BẢN ĐƠN THƯ (HÒM THƯ CÔNG VỤ):", fill=(11, 87, 208), font=font_meta_bold)
+
+    # Wrap nội dung văn bản - 6 đoạn văn fit gọn trong 1 trang
+    y = 275
+    paragraphs = [p.strip() for p in body_text.split("\n\n") if p.strip()]
+    for p in paragraphs:
+        if p.startswith("Tiêu đề:"):
+            continue
+        wrapped = textwrap.wrap(p, width=82)
+        for line in wrapped:
+            if y > height - 190:
+                break
+            draw.text((60, y), line, fill=(30, 41, 59), font=font_body)
+            y += 20
+        y += 10
+        if y > height - 190:
+            break
+
+    # Dấu mộc tiếp nhận hành chính
+    stamp_x, stamp_y = width - 190, height - 120
+    draw.ellipse([(stamp_x - 65, stamp_y - 65), (stamp_x + 65, stamp_y + 65)], outline=(220, 38, 38), width=3)
+    draw.ellipse([(stamp_x - 58, stamp_y - 58), (stamp_x + 58, stamp_y + 58)], outline=(220, 38, 38), width=1)
+    draw.text((stamp_x, stamp_y - 25), "UBND TỈNH ĐỒNG NAI", fill=(220, 38, 38), anchor="mm", font=font_stamp)
+    draw.text((stamp_x, stamp_y), "★ ĐÃ TIẾP NHẬN ★", fill=(220, 38, 38), anchor="mm", font=font_stamp)
+    draw.text((stamp_x, stamp_y + 25), "HÒM THƯ CÔNG VỤ", fill=(220, 38, 38), anchor="mm", font=font_stamp)
+
+    draw.text((60, height - 45), f"Hệ thống số hóa đơn thư trực tuyến - Tỉnh Đồng Nai | Mã hồ sơ: {tracking_code}", fill=(140, 145, 155), font=font_meta)
+
+    img.save(file_path, "JPEG", quality=92)
+    logger.info(f"✓ Đã kết xuất ảnh A4 tài liệu đơn thư: {file_path}")
+    return file_path
+
+
 def extract_email_data(msg: email.message.Message, tracking_code: str) -> Dict[str, Any]:
     """
     Bóc tách nội dung văn bản (plain text/html) và lưu các tệp ảnh đính kèm (JPG, PNG, WEBP).
@@ -109,7 +239,7 @@ def extract_email_data(msg: email.message.Message, tracking_code: str) -> Dict[s
         content_type = part.get_content_type()
         content_disposition = str(part.get("Content-Disposition") or "")
 
-        # 1. Trích xuất thân thư plain text
+        # Trích xuất thân thư plain text
         if content_type == "text/plain" and "attachment" not in content_disposition:
             payload = part.get_payload(decode=True)
             if payload:
@@ -119,7 +249,7 @@ def extract_email_data(msg: email.message.Message, tracking_code: str) -> Dict[s
                 except Exception:
                     text_content += payload.decode("utf-8", errors="replace") + "\n"
 
-        # 2. Trích xuất thân thư HTML nếu chưa có plain text
+        # Trích xuất thân thư HTML nếu chưa có plain text
         elif content_type == "text/html" and "attachment" not in content_disposition:
             payload = part.get_payload(decode=True)
             if payload:
@@ -129,7 +259,7 @@ def extract_email_data(msg: email.message.Message, tracking_code: str) -> Dict[s
                 except Exception:
                     html_content += payload.decode("utf-8", errors="replace") + "\n"
 
-        # 3. Trích xuất tệp ảnh đính kèm hiện trường / đơn viết tay
+        # Trích xuất tệp ảnh đính kèm hiện trường / đơn viết tay
         if "attachment" in content_disposition or content_type.startswith("image/"):
             raw_filename = part.get_filename()
             if raw_filename:
@@ -145,13 +275,13 @@ def extract_email_data(msg: email.message.Message, tracking_code: str) -> Dict[s
                         saved_images.append(filepath)
                         logger.info(f"✓ Đã tải tệp ảnh đính kèm từ email: {safe_filename}")
 
-    # Làm sạch nội dung văn bản
-    final_text = text_content.strip()
+    # Làm sạch nội dung văn bản & chuẩn hóa ngắt dòng giữa câu
+    final_text = normalize_email_body(text_content.strip())
     if not final_text and html_content.strip():
         # Lọc thô thẻ html
         import re
         clean_html = re.sub(r"<[^>]+>", " ", html_content)
-        final_text = re.sub(r"\s+", " ", clean_html).strip()
+        final_text = normalize_email_body(clean_html)
 
     if not final_text:
         final_text = "Đơn thư gửi kèm hình ảnh hiện trường qua hòm thư điện tử công vụ"
@@ -418,25 +548,57 @@ def sync_real_gmail_inbox(
                         logger.info(f"Bỏ qua email trùng lặp (Message-ID: {original_msg_id}) -> Đã tồn tại mã: {existing_ticket.tracking_code}")
                         continue
 
-                # 1. Bóc tách người gửi & tiêu đề
+                # Bóc tách người gửi & tiêu đề
                 from_header = decode_mime_text(msg.get("From", ""))
                 sender_name, sender_email = parseaddr(from_header)
                 subject = decode_mime_text(msg.get("Subject", "Phản ánh qua Gmail"))
 
-                # 2. Sinh mã hồ sơ duy nhất chuẩn hành chính
-                today_str = datetime.now().strftime("%Y%m%d")
+                # Lấy timestamp email từ header Date gốc (chuyển sang giờ Việt Nam UTC+7)
+                from email.utils import parsedate_to_datetime
+                import zoneinfo
+                raw_date_header = msg.get("Date")
+                ticket_created_at = datetime.now()
+                if raw_date_header:
+                    try:
+                        parsed_dt = parsedate_to_datetime(raw_date_header)
+                        try:
+                            vn_tz = zoneinfo.ZoneInfo("Asia/Ho_Chi_Minh")
+                            ticket_created_at = parsed_dt.astimezone(vn_tz).replace(tzinfo=None)
+                        except Exception:
+                            from datetime import timezone, timedelta
+                            vn_tz = timezone(timedelta(hours=7))
+                            ticket_created_at = parsed_dt.astimezone(vn_tz).replace(tzinfo=None)
+                    except Exception as date_err:
+                        logger.warning(f"Lỗi phân tích Date header ({raw_date_header}): {date_err}")
+
+                # Sinh mã hồ sơ duy nhất chuẩn hành chính
+                today_str = ticket_created_at.strftime("%Y%m%d")
                 random_suffix = str(uuid.uuid4().int)[:4]
                 tracking_code = f"ĐN-{today_str}-{random_suffix}"
 
-                # 3. Bóc tách thân thư & tải tệp ảnh đính kèm
+                # Bóc tách thân thư & tải tệp ảnh đính kèm
                 extracted = extract_email_data(msg, tracking_code)
-                full_raw_text = f"Tiêu đề: {subject}\n{extracted['text']}"
+                clean_extracted_text = extracted['text']
+                full_raw_text = f"Tiêu đề: {subject}\n\n{clean_extracted_text}"
                 saved_images = extracted.get("images", [])
+
+                # Nếu email không có file ảnh hiện trường đính kèm, tự động sinh bản scan A4 chuẩn hành chính
+                if not saved_images:
+                    a4_img_path = create_email_a4_document(
+                        tracking_code=tracking_code,
+                        citizen_name=sender_name or clean_account,
+                        citizen_email=sender_email or clean_account,
+                        subject=subject,
+                        body_text=clean_extracted_text,
+                        created_at=ticket_created_at
+                    )
+                    saved_images.append(a4_img_path)
+
                 image_urls_list = [f"/uploads/{os.path.basename(img)}" for img in saved_images if os.path.exists(img)]
                 primary_image = saved_images[0] if saved_images else None
                 primary_image_url = image_urls_list[0] if image_urls_list else None
 
-                # 4. Tạo bản ghi Ticket mới vào SQL Server (source="GMAIL_REAL")
+                # Tạo bản ghi Ticket mới vào SQL Server (source="GMAIL_REAL")
                 new_ticket = Ticket(
                     tracking_code=tracking_code,
                     source="GMAIL_REAL",
@@ -449,14 +611,15 @@ def sync_real_gmail_inbox(
                     image_urls=json.dumps(image_urls_list, ensure_ascii=False) if image_urls_list else None,
                     status="PROCESSING",
                     dept_code="UBND_CAP_HUYEN",
-                    dept_name="Bộ phận Một cửa / UBND Cấp Huyện",
+                    dept_name="Ban Tiếp công dân Tỉnh",
                     priority="TRUNG_BINH",
+                    created_at=ticket_created_at,
                 )
                 db.add(new_ticket)
                 db.commit()
                 db.refresh(new_ticket)
 
-                # 5. Đưa qua Gemini 1.5 Flash phân tích đa phương thức
+                # Phân tích qua Gemini AI đa phương thức
                 image_part = None
                 if primary_image and os.path.exists(primary_image):
                     try:
@@ -477,7 +640,19 @@ def sync_real_gmail_inbox(
                 new_ticket.dept_name = DEPT_NAMES.get(routed_dept, routed_dept)
                 new_ticket.priority = ai_res_dict.get("priority", "TRUNG_BINH")
 
-                # 6. Lưu kết quả bóc tách vào bảng ai_results
+                # Định dạng dự thảo văn bản trả lời chuẩn Nghị định 30
+                from modules.tickets.service import format_administrative_draft
+                raw_draft = ai_res_dict.get("draft_reply", "") or ai_res_dict.get("draft_response", "")
+                formatted_draft = format_administrative_draft(
+                    dept_code=routed_dept,
+                    citizen_name=new_ticket.citizen_name or "Quý công dân",
+                    summary=ai_res_dict.get("summary", subject),
+                    legal_basis=ai_res_dict.get("legal_basis", ""),
+                    core_reply=raw_draft,
+                    tracking_code=new_ticket.tracking_code
+                )
+
+                # Lưu kết quả bóc tách vào bảng ai_results
                 entities = ai_res_dict.get("entities", {"locations": [], "issues": []})
                 entities_str = json.dumps(entities, ensure_ascii=False) if isinstance(entities, dict) else "{}"
 
@@ -489,7 +664,7 @@ def sync_real_gmail_inbox(
                     priority=new_ticket.priority,
                     entities_json=entities_str,
                     legal_basis=ai_res_dict.get("legal_basis", ""),
-                    draft_reply=ai_res_dict.get("draft_reply", ""),
+                    draft_reply=formatted_draft,
                     confidence_score=float(ai_res_dict.get("confidence_score", 0.0)),
                 )
                 db.add(ai_record)

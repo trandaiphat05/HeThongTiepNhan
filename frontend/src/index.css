@@ -4,43 +4,45 @@
 
 @layer base {
   html {
-    font-size: 16px;
+    font-size: 14px;
     scroll-behavior: smooth;
   }
   
   body {
-    @apply bg-slate-50 text-slate-800 leading-relaxed font-sans antialiased;
+    background-color: #F6F8FC;
+    color: #1F1F1F;
+    @apply leading-relaxed font-sans antialiased;
   }
 
-  /* Tối ưu vùng chạm và font size cho form input */
+  /* Form touch areas and typography */
   button, input, select, textarea {
     @apply font-sans;
   }
 }
 
 @layer components {
-  /* Khối thẻ chuẩn GovTech Clean Minimalist */
+  /* Modern Administrative Surface */
   .gov-card {
-    @apply bg-white border border-slate-200/80 rounded-xl shadow-xs p-5 sm:p-6;
+    @apply bg-white border border-[#E2E8F0] rounded-2xl shadow-xs p-5 sm:p-6;
   }
   
-  /* Nút bấm hành động chính (Xanh hành chính #1E3A8A) */
+  /* Primary Action (#0B57D0 / hover #0842A0) */
   .gov-btn-primary {
-    @apply bg-gov-blue hover:bg-gov-blue-dark text-white font-medium px-5 py-2.5 rounded-lg transition-colors inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-xs;
+    @apply bg-[#0B57D0] hover:bg-[#0842A0] text-white font-medium px-5 py-2.5 rounded-full transition-colors inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-xs;
   }
 
-  /* Nút bấm phụ */
+  /* Secondary Button */
   .gov-btn-secondary {
-    @apply bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-medium px-4 py-2.5 rounded-lg transition-colors inline-flex items-center justify-center gap-2 disabled:opacity-50;
+    @apply bg-white hover:bg-slate-100 text-[#1F1F1F] border border-[#E2E8F0] font-medium px-4 py-2 rounded-full transition-colors inline-flex items-center justify-center gap-2 disabled:opacity-50;
   }
 
-  /* Nút bấm điểm nhấn hổ phách */
-  .gov-btn-accent {
-    @apply bg-amber-500 hover:bg-amber-600 text-slate-950 font-semibold px-5 py-2.5 rounded-lg transition-colors inline-flex items-center justify-center gap-2 shadow-xs;
+  /* Compose Button (Gmail Style) */
+  .gov-btn-compose {
+    @apply bg-[#C2E7FF] hover:bg-[#b2defc] text-[#001D35] font-semibold px-6 py-3.5 rounded-2xl shadow-sm transition-all inline-flex items-center gap-3;
   }
 
-  /* Trường nhập liệu */
+  /* Standard Input */
   .gov-input {
-    @apply w-full bg-white border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm sm:text-base text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-gov-blue/20 focus:border-gov-blue transition-all;
+    @apply w-full bg-white border border-[#E2E8F0] rounded-xl px-3.5 py-2 text-sm text-[#1F1F1F] placeholder-[#5F6368] focus:outline-none focus:border-[#0B57D0] focus:ring-1 focus:ring-[#0B57D0] transition-all;
   }
 }

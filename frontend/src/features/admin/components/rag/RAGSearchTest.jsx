@@ -1,7 +1,15 @@
 import React, { useState } from 'react';
 import PropTypes from 'prop-types';
-import { BookOpen, Search } from 'lucide-react';
+import { BookOpen, Search, AlertCircle } from 'lucide-react';
 import { api } from '../../../../services/api';
+import { getDepartmentName } from '../../../../constants/departments';
+
+const formatRAGCategory = (cat) => {
+  if (!cat || cat === 'ALL') return 'Mọi Lĩnh Vực';
+  if (cat === 'CHUNG') return 'Quy Định Chung';
+  if (cat === 'REQUIRE_HUMAN_REVIEW') return 'Điều Phối Ngoại Lệ';
+  return getDepartmentName(cat, cat);
+};
 
 /**
  * Khung tra cứu căn cứ văn bản quy phạm pháp luật theo nội dung thực tế
@@ -10,17 +18,19 @@ export default function RAGSearchTest() {
   const [testQuery, setTestQuery] = useState('');
   const [testCategory, setTestCategory] = useState('ALL');
   const [testResults, setTestResults] = useState(null);
+  const [searchError, setSearchError] = useState(null);
   const [isSearchingTest, setIsSearchingTest] = useState(false);
 
   const handleRunSearchTest = async (e) => {
     e.preventDefault();
     if (!testQuery.trim()) return;
     setIsSearchingTest(true);
+    setSearchError(null);
     try {
       const res = await api.searchRAGKnowledge(testQuery, testCategory);
       setTestResults(res);
     } catch (err) {
-      alert('Lỗi tra cứu: ' + (err.response?.data?.detail || err.message));
+      setSearchError('Lỗi tra cứu: ' + (err.response?.data?.detail || err.message));
     } finally {
       setIsSearchingTest(false);
     }
@@ -38,6 +48,13 @@ export default function RAGSearchTest() {
         </p>
       </div>
 
+      {searchError && (
+        <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+          <span>{searchError}</span>
+        </div>
+      )}
+
       <form onSubmit={handleRunSearchTest} className="space-y-3">
         <div className="flex flex-col sm:flex-row gap-2.5">
           <input
@@ -51,13 +68,20 @@ export default function RAGSearchTest() {
           <select
             value={testCategory}
             onChange={(e) => setTestCategory(e.target.value)}
-            className="gov-input text-xs sm:text-sm py-2 font-medium text-slate-800 sm:w-44"
+            className="gov-input text-xs sm:text-sm py-2 font-medium text-slate-800 sm:w-48"
           >
             <option value="ALL">Mọi Lĩnh Vực</option>
+            <option value="CHUNG">Quy Định Chung</option>
             <option value="SO_GTVT">Sở Giao thông Vận tải</option>
             <option value="SO_TNMT">Sở Tài nguyên & Môi trường</option>
             <option value="SO_XD">Sở Xây dựng</option>
+            <option value="SO_YTE">Sở Y tế</option>
+            <option value="SO_GDDT">Sở Giáo dục & Đào tạo</option>
+            <option value="SO_LDTBXH">Sở LĐ-TB&XH</option>
+            <option value="CONG_AN_TINH">Công an Tỉnh Đồng Nai</option>
+            <option value="BO_PHAN_MOT_CUA">Ban Tiếp công dân Tỉnh</option>
             <option value="UBND_CAP_HUYEN">UBND Cấp Huyện / TP</option>
+            <option value="REQUIRE_HUMAN_REVIEW">Điều phối ngoại lệ</option>
           </select>
 
           <button
@@ -80,32 +104,38 @@ export default function RAGSearchTest() {
 
           {testResults.matches && testResults.matches.length > 0 ? (
             <div className="grid grid-cols-1 gap-2.5">
-              {testResults.matches.map((item, idx) => (
-                <div
-                  key={idx}
-                  className="bg-white p-3.5 rounded-lg border border-slate-200 shadow-2xs space-y-2"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-sm text-gov-blue flex items-center gap-2">
-                      <span className="w-4 h-4 rounded-full bg-amber-400 text-slate-900 text-[10px] flex items-center justify-center font-bold">
-                        {idx + 1}
+              {testResults.matches.map((item, idx) => {
+                const scorePercent = typeof item.relevance_score === 'number'
+                  ? (item.relevance_score * 100).toFixed(1) + '%'
+                  : (item.relevance_score || '—');
+
+                return (
+                  <div
+                    key={idx}
+                    className="bg-white p-3.5 rounded-lg border border-slate-200 shadow-2xs space-y-2"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-semibold text-sm text-gov-blue flex items-center gap-2">
+                        <span className="w-4 h-4 rounded-full bg-amber-400 text-slate-900 text-[10px] flex items-center justify-center font-bold">
+                          {idx + 1}
+                        </span>
+                        {item.title}
                       </span>
-                      {item.title}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-blue-50 text-gov-blue border border-blue-200">
-                        {item.category}
-                      </span>
-                      <span className="px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        Độ tương thích: {item.relevance_score}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-blue-50 text-gov-blue border border-blue-200">
+                          {formatRAGCategory(item.category)}
+                        </span>
+                        <span className="px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          Độ tương đồng: {scorePercent}
+                        </span>
+                      </div>
                     </div>
+                    <p className="text-xs text-slate-700 leading-relaxed bg-slate-50 p-2.5 rounded whitespace-pre-line border border-slate-100 font-sans">
+                      {item.content}
+                    </p>
                   </div>
-                  <p className="text-xs text-slate-700 leading-relaxed bg-slate-50 p-2.5 rounded whitespace-pre-line border border-slate-100 font-sans">
-                    {item.content}
-                  </p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="text-center py-6 text-slate-400 text-xs bg-white rounded-lg border border-slate-200">

@@ -10,14 +10,23 @@ import random
 import logging
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from fastapi import HTTPException, BackgroundTasks, UploadFile
+from fastapi import HTTPException, BackgroundTasks, UploadFile, status
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, func
+from sqlalchemy import and_, or_, func
 
 from core.database import SessionLocal
 from core.config import UPLOAD_DIR
+from modules.database.models import TicketStatusEvent
 from modules.tickets.models import Ticket, AIResult, Department
-from modules.tickets.schemas import ApprovalRequest, TransferRequest, DispatchRequest, ReassignRequest
+from modules.tickets.schemas import (
+    ApprovalRequest,
+    TransferRequest,
+    DispatchRequest,
+    ReassignRequest,
+    PublicTicketTracking,
+    TicketStatusMilestone,
+    DraftUpdateRequest
+)
 from modules.ai_engine import process_civic_complaint
 
 logger = logging.getLogger("TicketService")
@@ -67,6 +76,19 @@ all_default_depts = [
 ]
 
 
+def make_clean_summary(text: Optional[str], max_len: int = 300) -> str:
+    """Tạo tóm tắt sạch, cắt theo ranh giới từ (word boundary) thay vì cắt cụt giữa chừng."""
+    if not text:
+        return "Đơn phản ánh trực tuyến của công dân"
+    cleaned = " ".join(text.split()).strip()
+    if len(cleaned) <= max_len:
+        return cleaned
+    truncated = cleaned[:max_len]
+    if " " in truncated:
+        truncated = truncated.rsplit(" ", 1)[0]
+    return truncated + "..."
+
+
 def format_administrative_draft(
     dept_code: str,
     citizen_name: str,
@@ -76,12 +98,47 @@ def format_administrative_draft(
     tracking_code: str = ""
 ) -> str:
     """Định dạng văn bản dự thảo theo đúng thể thức hành chính Việt Nam (Nghị định 30/2020/NĐ-CP)."""
+    import re
     org_title, doc_number = dept_header_map.get(dept_code, ("ỦY BAN NHÂN DÂN TỈNH ĐỒNG NAI", "Số: .../TB-UBND"))
     today = datetime.now()
     
-    # Nếu core_reply đã có tiêu ngữ thì giữ nguyên
+    # Kiểm tra xem đơn có nêu địa chỉ cụ thể không
+    combined_check = (summary or "") + " " + (core_reply or "")
+    has_specific_address = any(k in combined_check.lower() for k in [
+        "đường", "phường", "xã", "khu phố", "thôn", "ấp", "tổ ", "quận", "huyện", "tp", "thành phố", "số nhà", "quốc lộ", "tỉnh lộ"
+    ])
+    address_sentence = "Đề nghị Ông/Bà cung cấp bổ sung thông tin địa chỉ, vị trí cụ thể của vụ việc để cơ quan chức năng có cơ sở kiểm tra và xử lý thực tế."
+
+    # Nếu core_reply đã có tiêu ngữ
     if core_reply and "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM" in core_reply:
-        return core_reply
+        cleaned = core_reply
+        if " / " in cleaned or " | " in cleaned:
+            cleaned = re.sub(r'\s*[\/|]\s*', '\n', cleaned)
+        # Chuẩn hóa năm 2024, 2025 -> năm hiện tại (2026)
+        cleaned = re.sub(r'năm\s+202[0-5]', f'năm {today.year}', cleaned, flags=re.IGNORECASE)
+        # Chuẩn hóa số văn bản bịa như "Số: 123/TB-" -> "Số: .../TB-"
+        cleaned = re.sub(r'Số:\s*\d+\/TB-', 'Số: .../TB-', cleaned, flags=re.IGNORECASE)
+        # Nếu thiếu địa chỉ và câu yêu cầu chưa có, bổ sung vào trước Nơi nhận
+        if not has_specific_address and address_sentence not in cleaned:
+            if "Nơi nhận:" in cleaned:
+                parts = cleaned.split("Nơi nhận:")
+                cleaned = parts[0].rstrip() + f"\n\n{address_sentence}\n\nNơi nhận:" + parts[1]
+            else:
+                cleaned += f"\n\n{address_sentence}"
+        return cleaned
+
+    content_lines = []
+    if core_reply and core_reply.strip():
+        content_lines.append(core_reply.strip())
+    else:
+        content_lines.append("1. Cơ quan đã tiếp nhận nội dung và cử tổ thanh tra chuyên ngành kiểm tra thực địa hiện trường.")
+        content_lines.append("2. Biện pháp xử lý: Cơ quan đã yêu cầu các bên liên quan khắc phục dứt điểm theo đúng quy định pháp luật.")
+        content_lines.append("3. Thời hạn hoàn thành: Kết quả xử lý cụ thể sẽ được thông báo đến công dân trong thời hạn 05 ngày làm việc.")
+    
+    if not has_specific_address and address_sentence not in " ".join(content_lines):
+        content_lines.append(f"\n{address_sentence}")
+
+    body_content = "\n".join(content_lines)
 
     return (
         f"CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM\n"
@@ -96,11 +153,11 @@ def format_administrative_draft(
         f"- Căn cứ pháp lý: {legal_basis or 'Luật Khiếu nại 2011, Luật Tiếp công dân 2013 và các quy định pháp luật chuyên ngành'};\n"
         f"- Xét nội dung phản ánh: \"{summary or 'Đơn thư phản ánh hiện trường'}\".\n\n"
         f"{org_title} có ý kiến trả lời/hướng dẫn xử lý chi tiết như sau:\n\n"
-        f"{core_reply.strip() if core_reply else 'Hồ sơ đã được tiếp nhận và giao cơ quan chuyên môn xác minh giải quyết.'}\n\n"
+        f"{body_content}\n\n"
         f"Nơi nhận:\n"
         f"- Công dân {citizen_name or 'gửi đơn'} (để biết);\n"
-        f"- Ban Giám đốc Sở;\n"
-        f"- Lưu: VT, Tổ xử lý đơn thư."
+        f"- Ban Giám đốc Sở / Lãnh đạo đơn vị;\n"
+        f"- Lưu: VT, Tổ Tiếp nhận đơn thư."
     )
 
 
@@ -146,6 +203,7 @@ def format_ticket_detail(t: Ticket) -> Dict[str, Any]:
         "department_code": t.dept_code,
         "dept_name": t.dept_name,
         "priority": t.priority,
+        "is_starred": bool(getattr(t, "is_starred", False)),
         "admin_note": t.admin_note,
         "rejection_reason": t.rejection_reason,
         "created_at": t.created_at.strftime("%Y-%m-%d %H:%M:%S") if t.created_at else "",
@@ -256,11 +314,20 @@ def process_ticket_background(ticket_id: int, raw_text: str, image_paths: Option
             db.add(ai_record)
 
         db.commit()
-        print(f"\033[96m[SQL SERVER]\033[0m Transaction commit thành công vào bảng tickets & ai_results cho đơn {ticket.tracking_code}.", flush=True)
         logger.info(f"✓ Hoàn tất xử lý AI background cho đơn {ticket.tracking_code} -> {routed_dept}")
     except Exception as e:
         logger.error(f"Lỗi trong BackgroundTask ticket {ticket_id}: {e}")
         db.rollback()
+        try:
+            fail_ticket = db.query(Ticket).filter(Ticket.ticket_id == ticket_id).first()
+            if fail_ticket:
+                fail_ticket.status = "AI_FAILED"
+                fail_ticket.dept_code = "REQUIRE_HUMAN_REVIEW"
+                fail_ticket.dept_name = DEPT_NAMES.get("REQUIRE_HUMAN_REVIEW", "Cần Admin Phân Luồng")
+                fail_ticket.admin_note = f"BackgroundTask AI thất bại: {str(e)}"
+                db.commit()
+        except Exception as update_err:
+            logger.error(f"Không thể cập nhật trạng thái AI_FAILED cho ticket {ticket_id}: {update_err}")
     finally:
         db.close()
 
@@ -295,8 +362,17 @@ async def submit_ticket_service(
     saved_image_urls = []
     in_memory_images = []
 
+    ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+
     for idx, img_file in enumerate(upload_list):
         clean_filename = os.path.basename(img_file.filename)
+        _, ext = os.path.splitext(clean_filename)
+        if ext.lower() not in ALLOWED_IMAGE_EXTENSIONS:
+            raise HTTPException(
+                status_code=400,
+                detail="Tệp tải lên không hợp lệ. Chỉ chấp nhận hình ảnh (JPG, PNG, WEBP)."
+            )
+
         filename = f"{tracking_code}_p{idx+1}_{clean_filename}"
         saved_path = os.path.abspath(os.path.join(UPLOAD_DIR, filename))
         content = await img_file.read()
@@ -305,6 +381,11 @@ async def submit_ticket_service(
         try:
             from PIL import Image
             import io
+            # Xác thực tính hợp lệ của tệp ảnh
+            test_img = Image.open(io.BytesIO(content))
+            test_img.verify()
+
+            # Mở lại để xử lý và nén ảnh
             pil_img = Image.open(io.BytesIO(content)).convert("RGB")
             pil_img.thumbnail((1600, 1600))
             out_buf = io.BytesIO()
@@ -314,37 +395,53 @@ async def submit_ticket_service(
                 f.write(compressed_bytes)
             out_buf.seek(0)
             in_memory_images.append(Image.open(out_buf))
-        except Exception as e:
-            with open(saved_path, "wb") as f:
-                f.write(content)
-            in_memory_images.append(saved_path)
+        except Exception:
+            raise HTTPException(
+                status_code=400,
+                detail="Tệp tải lên không hợp lệ. Chỉ chấp nhận hình ảnh (JPG, PNG, WEBP)."
+            )
 
         saved_image_urls.append(f"/uploads/{filename}")
 
     primary_image_url = saved_image_urls[0] if saved_image_urls else None
     image_urls_json = json.dumps(saved_image_urls, ensure_ascii=False) if saved_image_urls else None
 
-    logger.info(f"Tiếp nhận đơn {tracking_code}: Đã nén RAM và lưu {len(saved_image_urls)} file ảnh vào uploads.")
-    print(f"\033[94m[INCOMING]\033[0m Nhận hồ sơ: {tracking_code} | Số lượng ảnh: {len(saved_image_urls)} | Nguồn: {source or 'WEB'}", flush=True)
+    logger.info(f"Tiếp nhận đơn {tracking_code}: Đã nén RAM và lưu {len(saved_image_urls)} file ảnh vào uploads | Nguồn: {source or 'WEB'}")
 
-    # Phân tích AI đa phương thức kết hợp RAG ngay trong request
+    # Phân tích AI đa phương thức kết hợp RAG ngay trong request (Chạy trên worker thread chống block event loop)
     ai_res_dict = None
+    ai_failed = False
+    ai_error_msg = ""
     try:
-        ai_res_dict = process_civic_complaint(
+        import asyncio
+        ai_res_dict = await asyncio.to_thread(
+            process_civic_complaint,
             user_text=raw_text or "Đơn phản ánh trực tuyến của công dân qua hình ảnh",
             image_bytes_or_part=in_memory_images if in_memory_images else None,
             db=db
         )
     except Exception as ai_err:
         logger.error(f"Lỗi khi gọi process_civic_complaint cho đơn {tracking_code}: {ai_err}")
+        ai_failed = True
+        ai_error_msg = str(ai_err)
         from modules.ai_engine.ai_service import classify_complaint_fallback
-        ai_res_dict = classify_complaint_fallback(raw_text or "")
+        try:
+            ai_res_dict = classify_complaint_fallback(raw_text or "")
+        except Exception:
+            ai_res_dict = None
 
-    routed_dept = ai_res_dict.get("department_code", "REQUIRE_HUMAN_REVIEW") if ai_res_dict else "REQUIRE_HUMAN_REVIEW"
-    status_val = "HUMAN_REVIEW" if routed_dept == "REQUIRE_HUMAN_REVIEW" else "ROUTED"
-    priority_val = ai_res_dict.get("priority", "TRUNG_BINH") if ai_res_dict else "TRUNG_BINH"
-    dept_name_val = DEPT_NAMES.get(routed_dept, routed_dept)
-    summary_val = ai_res_dict.get("summary", "") if ai_res_dict else (raw_text[:120] if raw_text else "Đơn phản ánh trực tuyến của công dân")
+    if ai_failed:
+        routed_dept = "REQUIRE_HUMAN_REVIEW"
+        status_val = "AI_FAILED"
+        priority_val = "TRUNG_BINH"
+        dept_name_val = DEPT_NAMES.get("REQUIRE_HUMAN_REVIEW", "Cần Admin Phân Luồng")
+        summary_val = make_clean_summary(raw_text)
+    else:
+        routed_dept = ai_res_dict.get("department_code", "REQUIRE_HUMAN_REVIEW") if ai_res_dict else "REQUIRE_HUMAN_REVIEW"
+        status_val = "HUMAN_REVIEW" if routed_dept == "REQUIRE_HUMAN_REVIEW" else "ROUTED"
+        priority_val = ai_res_dict.get("priority", "TRUNG_BINH") if ai_res_dict else "TRUNG_BINH"
+        dept_name_val = DEPT_NAMES.get(routed_dept, routed_dept)
+        summary_val = ai_res_dict.get("summary", "") if ai_res_dict else make_clean_summary(raw_text)
 
     new_ticket = Ticket(
         tracking_code=tracking_code,
@@ -359,7 +456,8 @@ async def submit_ticket_service(
         status=status_val,
         dept_code=routed_dept,
         dept_name=dept_name_val,
-        priority=priority_val
+        priority=priority_val,
+        admin_note=f"AI phân tích gặp sự cố: {ai_error_msg}. Đã chuyển sang trạng thái AI_FAILED." if ai_failed else None
     )
     db.add(new_ticket)
     db.commit()
@@ -492,6 +590,8 @@ def create_ticket_service(
 
     # Phân tích AI đa phương thức kết hợp RAG ngay trong request
     ai_res_dict = None
+    ai_failed = False
+    ai_error_msg = ""
     try:
         ai_res_dict = process_civic_complaint(
             user_text=raw_text or "Đơn phản ánh trực tuyến của công dân qua hình ảnh",
@@ -500,14 +600,26 @@ def create_ticket_service(
         )
     except Exception as ai_err:
         logger.error(f"Lỗi khi gọi process_civic_complaint cho đơn {tracking_code}: {ai_err}")
+        ai_failed = True
+        ai_error_msg = str(ai_err)
         from modules.ai_engine.ai_service import classify_complaint_fallback
-        ai_res_dict = classify_complaint_fallback(raw_text or "")
+        try:
+            ai_res_dict = classify_complaint_fallback(raw_text or "")
+        except Exception:
+            ai_res_dict = None
 
-    routed_dept = ai_res_dict.get("department_code", "REQUIRE_HUMAN_REVIEW") if ai_res_dict else "REQUIRE_HUMAN_REVIEW"
-    status_val = "HUMAN_REVIEW" if routed_dept == "REQUIRE_HUMAN_REVIEW" else "ROUTED"
-    priority_val = ai_res_dict.get("priority", "TRUNG_BINH") if ai_res_dict else "TRUNG_BINH"
-    dept_name_val = DEPT_NAMES.get(routed_dept, routed_dept)
-    summary_val = ai_res_dict.get("summary", "") if ai_res_dict else (raw_text[:120] if raw_text else "Đơn phản ánh trực tuyến của công dân")
+    if ai_failed:
+        routed_dept = "REQUIRE_HUMAN_REVIEW"
+        status_val = "AI_FAILED"
+        priority_val = "TRUNG_BINH"
+        dept_name_val = DEPT_NAMES.get("REQUIRE_HUMAN_REVIEW", "Cần Admin Phân Luồng")
+        summary_val = make_clean_summary(raw_text)
+    else:
+        routed_dept = ai_res_dict.get("department_code", "REQUIRE_HUMAN_REVIEW") if ai_res_dict else "REQUIRE_HUMAN_REVIEW"
+        status_val = "HUMAN_REVIEW" if routed_dept == "REQUIRE_HUMAN_REVIEW" else "ROUTED"
+        priority_val = ai_res_dict.get("priority", "TRUNG_BINH") if ai_res_dict else "TRUNG_BINH"
+        dept_name_val = DEPT_NAMES.get(routed_dept, routed_dept)
+        summary_val = ai_res_dict.get("summary", "") if ai_res_dict else make_clean_summary(raw_text)
 
     new_ticket = Ticket(
         tracking_code=tracking_code,
@@ -522,7 +634,8 @@ def create_ticket_service(
         status=status_val,
         dept_code=routed_dept,
         dept_name=dept_name_val,
-        priority=priority_val
+        priority=priority_val,
+        admin_note=f"AI phân tích gặp sự cố: {ai_error_msg}. Đã chuyển sang trạng thái AI_FAILED." if ai_failed else None
     )
     db.add(new_ticket)
     db.commit()
@@ -598,14 +711,27 @@ def list_tickets_service(
     source: Optional[str] = "ALL",
     priority: Optional[str] = "ALL",
     status: Optional[str] = "ALL",
-    search: Optional[str] = None
+    search: Optional[str] = None,
+    *,
+    current_user: Optional[dict] = None,
 ) -> List[Dict[str, Any]]:
-    """Lọc danh sách đơn thư theo tiêu chí phòng ban, nguồn, độ ưu tiên, trạng thái."""
+    """Lọc danh sách đơn thư theo tiêu chí phòng ban, nguồn, độ ưu tiên, trạng thái kết hợp Anti-IDOR."""
     query = db.query(Ticket)
 
     target_dept = department_code or dept_code
-    if target_dept and target_dept != "ALL":
-        query = query.filter(Ticket.dept_code == target_dept)
+    if current_user and current_user.get("role") == "CITIZEN":
+        # Anti-IDOR: Công dân chỉ xem được đơn của chính mình
+        user_id = current_user.get("user_id")
+        query = query.filter(Ticket.user_id == user_id)
+    elif current_user and current_user.get("role") == "OFFICER":
+        officer_dept = current_user.get("dept_code")
+        if officer_dept and officer_dept != "ALL":
+            query = query.filter(Ticket.dept_code == officer_dept)
+        elif target_dept and target_dept != "ALL":
+            query = query.filter(Ticket.dept_code == target_dept)
+    else:
+        if target_dept and target_dept != "ALL":
+            query = query.filter(Ticket.dept_code == target_dept)
 
     if source and source != "ALL":
         query = query.filter(Ticket.source == source)
@@ -630,25 +756,106 @@ def list_tickets_service(
     return [format_ticket_detail(t) for t in tickets]
 
 
-def get_ticket_by_tracking_code_service(db: Session, tracking_code: str) -> Dict[str, Any]:
-    """Tra cứu tiến độ hồ sơ theo mã biên nhận hành chính."""
+def get_ticket_by_tracking_code_service(db: Session, tracking_code: str) -> PublicTicketTracking:
     clean_code = tracking_code.strip().upper()
-    ticket = db.query(Ticket).filter(Ticket.tracking_code == clean_code).first()
+    ticket = db.query(Ticket).filter(func.upper(Ticket.tracking_code) == clean_code).first()
     if not ticket:
-        raise HTTPException(status_code=404, detail=f"Không tìm thấy hồ sơ với mã: {clean_code}")
-    return format_ticket_detail(ticket)
+        raise HTTPException(status_code=404, detail="Không tìm thấy hồ sơ.")
+    events = (
+        db.query(TicketStatusEvent)
+        .filter(TicketStatusEvent.ticket_id == ticket.ticket_id)
+        .order_by(TicketStatusEvent.event_id)
+        .all()
+    )
+    history = [TicketStatusMilestone(status="RECEIVED", occurred_at=ticket.created_at)]
+    history.extend(TicketStatusMilestone(status=e.status, occurred_at=e.occurred_at) for e in events)
+    if not events or events[-1].status != ticket.status:
+        history.append(TicketStatusMilestone(status=ticket.status, occurred_at=ticket.updated_at))
+
+    ai_data = None
+    if ticket.ai_result:
+        entities = {}
+        try:
+            entities = json.loads(ticket.ai_result.entities_json)
+        except Exception:
+            entities = {"locations": [], "issues": []}
+        ai_data = {
+            "extracted_text": ticket.ai_result.extracted_text,
+            "summary": ticket.ai_result.summary,
+            "department_code": ticket.ai_result.department_code,
+            "priority": ticket.ai_result.priority,
+            "entities": entities,
+            "legal_basis": ticket.ai_result.legal_basis,
+            "draft_reply": ticket.ai_result.draft_reply,
+            "confidence_score": ticket.ai_result.confidence_score
+        }
+
+    dept_display = ticket.dept_name or (ticket.department.dept_name if ticket.department else "Đang thẩm tra")
+
+    return PublicTicketTracking(
+        ticket_id=ticket.ticket_id,
+        ticket_code=ticket.tracking_code,
+        tracking_code=ticket.tracking_code,
+        title="Đơn thư phản ánh",
+        dept_code=ticket.dept_code,
+        department_code=ticket.dept_code,
+        dept_name=dept_display,
+        department_name=dept_display,
+        status=ticket.status,
+        created_at=ticket.created_at,
+        updated_at=ticket.updated_at,
+        status_history=history,
+        ai_result=ai_data,
+        raw_text=ticket.raw_text,
+        image_url=ticket.image_url,
+        image_urls=ticket.get_image_urls_list() if hasattr(ticket, "get_image_urls_list") else []
+    )
+
+
+def _get_staff_ticket(db: Session, ticket_id: int, current_user: Optional[dict] = None, *, for_update: bool = False) -> Ticket:
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Yêu cầu đăng nhập để truy cập hồ sơ nội bộ.")
+
+    role = current_user.get("role")
+    if role == "CITIZEN" and for_update:
+        raise HTTPException(status_code=403, detail="Công dân không có quyền thao tác nghiệp vụ trên hồ sơ.")
+
+    query = db.query(Ticket).filter(Ticket.ticket_id == ticket_id)
+    if for_update:
+        connection = db.connection()
+        if connection.dialect.name == "sqlite":
+            if not connection.connection.driver_connection.in_transaction:
+                connection.exec_driver_sql("BEGIN IMMEDIATE")
+        else:
+            query = query.with_hint(Ticket, "WITH (UPDLOCK, ROWLOCK)", dialect_name="mssql")
+    ticket = query.first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Hồ sơ không tồn tại.")
+
+    if role == "CITIZEN":
+        if ticket.user_id != current_user.get("user_id"):
+            raise HTTPException(status_code=403, detail="Không có quyền truy cập hồ sơ của người khác.")
+    elif role == "OFFICER":
+        officer_dept = current_user.get("dept_code")
+        if officer_dept and officer_dept != "ALL" and officer_dept != ticket.dept_code:
+            raise HTTPException(status_code=403, detail="Không có quyền truy cập hồ sơ ngoài cơ quan.")
+    return ticket
+
+
+def get_internal_ticket_service(db: Session, ticket_id: int, current_user: Optional[dict] = None) -> Dict[str, Any]:
+    return format_ticket_detail(_get_staff_ticket(db, ticket_id, current_user))
 
 
 def approve_ticket_service(
     db: Session,
     ticket_id: int,
     req: ApprovalRequest,
-    background_tasks: BackgroundTasks
+    background_tasks: BackgroundTasks,
+    *,
+    current_user: Optional[dict] = None,
 ) -> Dict[str, Any]:
     """Cán bộ phê duyệt dự thảo trả lời và kích hoạt phát hành email công vụ tự động."""
-    ticket = db.query(Ticket).filter(Ticket.ticket_id == ticket_id).first()
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Hồ sơ không tồn tại.")
+    ticket = _get_staff_ticket(db, ticket_id, current_user, for_update=True)
 
     ticket.status = "APPROVED"
     if req.department_code:
@@ -665,7 +872,7 @@ def approve_ticket_service(
 
     db.commit()
     db.refresh(ticket)
-    print(f"\033[92m[OFFICER APPROVED]\033[0m Cán bộ đã phê duyệt hồ sơ {ticket.tracking_code} | Cơ quan phát hành: {ticket.dept_name}", flush=True)
+    logger.info(f"Cán bộ đã phê duyệt hồ sơ {ticket.tracking_code} | Cơ quan phát hành: {ticket.dept_name}")
 
     email_status = "Không có địa chỉ email công dân để gửi"
     if ticket.citizen_email and "@" in ticket.citizen_email:
@@ -689,11 +896,9 @@ def approve_ticket_service(
     }
 
 
-def transfer_ticket_service(db: Session, ticket_id: int, req: TransferRequest) -> Dict[str, Any]:
+def transfer_ticket_service(db: Session, ticket_id: int, req: TransferRequest, *, current_user: Optional[dict] = None) -> Dict[str, Any]:
     """Chuyển tiếp hồ sơ sang đơn vị khác hoặc yêu cầu Admin phân luồng (Human Override)."""
-    ticket = db.query(Ticket).filter(Ticket.ticket_id == ticket_id).first()
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Hồ sơ không tồn tại.")
+    ticket = _get_staff_ticket(db, ticket_id, current_user, for_update=True)
 
     target = req.target_dept
     # Chuẩn hóa nếu nhận SO_XAYDUNG hoặc UBND_TINH
@@ -718,7 +923,7 @@ def transfer_ticket_service(db: Session, ticket_id: int, req: TransferRequest) -
     db.commit()
     db.refresh(ticket)
     
-    print(f"\033[95m[TRANSFER OVERRIDE]\033[0m Cán bộ đã chuyển tuyến hồ sơ {ticket.tracking_code} sang {ticket.dept_name} | Lý do: {reason_str}", flush=True)
+    logger.info(f"Cán bộ đã chuyển tuyến hồ sơ {ticket.tracking_code} sang {ticket.dept_name} | Lý do: {reason_str}")
     
     return {
         "success": True, 
@@ -731,11 +936,15 @@ def transfer_ticket_service(db: Session, ticket_id: int, req: TransferRequest) -
     }
 
 
-def reassign_ticket_service(db: Session, ticket_id: int, req: ReassignRequest) -> Dict[str, Any]:
+def reassign_ticket_service(db: Session, ticket_id: int, req: ReassignRequest, *, current_user: Optional[dict] = None) -> Dict[str, Any]:
     """Cán bộ chuyển tuyến thủ công (Human Override): PUT /api/tickets/{id}/reassign."""
-    ticket = db.query(Ticket).filter(Ticket.ticket_id == ticket_id).first()
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Hồ sơ không tồn tại.")
+    ticket = _get_staff_ticket(db, ticket_id, current_user, for_update=True)
+
+    if ticket.status in ["APPROVED", "RESOLVED", "REJECTED"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Hồ sơ {ticket.tracking_code} đã ở trạng thái {ticket.status} (đã ban hành phản hồi hoặc đóng/từ chối), không thể chuyển tuyến lại."
+        )
 
     target = req.department_code
     normalized_target = "SO_XD" if target == "SO_XAYDUNG" else target
@@ -746,7 +955,7 @@ def reassign_ticket_service(db: Session, ticket_id: int, req: ReassignRequest) -
     ticket.dept_name = new_dept_name
     ticket.status = "ROUTED"
 
-    reassigned_by = req.reassigned_by or "Cán bộ thẩm tra"
+    reassigned_by = (current_user.get("username") if current_user else None) or (getattr(req, "reassigned_by", None) or "Cán bộ thẩm tra")
     now_str = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     reason_str = req.reason.strip() if req.reason else "Chuyển cơ quan đúng thẩm quyền giải quyết"
     audit_entry = f"[{now_str}] {reassigned_by} chuyển tuyến từ {old_dept} -> {new_dept_name}. Lý do: {reason_str}"
@@ -759,7 +968,7 @@ def reassign_ticket_service(db: Session, ticket_id: int, req: ReassignRequest) -
     db.commit()
     db.refresh(ticket)
 
-    print(f"\033[95m[HUMAN OVERRIDE REASSIGN]\033[0m {reassigned_by} đã chuyển tuyến hồ sơ {ticket.tracking_code} sang {ticket.dept_name} | Lý do: {reason_str}", flush=True)
+    logger.info(f"{reassigned_by} đã chuyển tuyến hồ sơ {ticket.tracking_code} sang {ticket.dept_name} | Lý do: {reason_str}")
 
     return {
         "success": True,
@@ -777,11 +986,9 @@ def reassign_ticket_service(db: Session, ticket_id: int, req: ReassignRequest) -
 
 
 
-def admin_dispatch_ticket_service(db: Session, req: DispatchRequest) -> Dict[str, Any]:
+def admin_dispatch_ticket_service(db: Session, req: DispatchRequest, *, current_user: Optional[dict] = None) -> Dict[str, Any]:
     """Admin phân bổ đơn vị chủ trì cho các hồ sơ phức tạp/ngoại lệ."""
-    ticket = db.query(Ticket).filter(Ticket.ticket_id == req.ticket_id).first()
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Hồ sơ không tồn tại.")
+    ticket = _get_staff_ticket(db, req.ticket_id, current_user, for_update=True)
 
     ticket.dept_code = req.target_dept
     ticket.status = "ROUTED"
@@ -793,11 +1000,9 @@ def admin_dispatch_ticket_service(db: Session, req: DispatchRequest) -> Dict[str
     return {"success": True, "message": f"Admin đã điều phối hồ sơ về {ticket.dept_name}."}
 
 
-def mark_ticket_spam_service(db: Session, ticket_id: int, reason: Optional[str] = None) -> Dict[str, Any]:
+def mark_ticket_spam_service(db: Session, ticket_id: int, reason: Optional[str] = None, *, current_user: Optional[dict] = None) -> Dict[str, Any]:
     """Đánh dấu loại bỏ đơn rác, spam hoặc khiêu khích."""
-    ticket = db.query(Ticket).filter(Ticket.ticket_id == ticket_id).first()
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Hồ sơ không tồn tại.")
+    ticket = _get_staff_ticket(db, ticket_id, current_user, for_update=True)
 
     ticket.status = "REJECTED"
     ticket.rejection_reason = reason or "Đơn rác hoặc nặc danh vô nghĩa"
@@ -806,62 +1011,170 @@ def mark_ticket_spam_service(db: Session, ticket_id: int, reason: Optional[str] 
     return {"success": True, "message": "Đã chuyển hồ sơ sang trạng thái hủy bỏ."}
 
 
+def update_ticket_draft_service(
+    db: Session,
+    ticket_id: int,
+    req: DraftUpdateRequest,
+    *,
+    current_user: Optional[dict] = None
+) -> Dict[str, Any]:
+    """Cán bộ lưu/cập nhật dự thảo trả lời, trích yếu, căn cứ pháp lý và cơ quan thụ lý."""
+    ticket = _get_staff_ticket(db, ticket_id, current_user, for_update=True)
+
+    if ticket.status in ["APPROVED", "RESOLVED", "REJECTED"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Hồ sơ {ticket.tracking_code} đã ở trạng thái {ticket.status} (đã ban hành văn bản chính thức hoặc đóng/từ chối), không thể chỉnh sửa bản thảo."
+        )
+
+    if req.department_code:
+        target = req.department_code
+        normalized_target = "SO_XD" if target == "SO_XAYDUNG" else target
+        ticket.dept_code = normalized_target
+        ticket.dept_name = DEPT_NAMES.get(target, DEPT_NAMES.get(normalized_target, target))
+
+    if ticket.ai_result:
+        if req.draft_reply is not None:
+            ticket.ai_result.draft_reply = req.draft_reply
+        if req.summary is not None:
+            ticket.ai_result.summary = req.summary
+        if req.extracted_text is not None:
+            ticket.ai_result.extracted_text = req.extracted_text
+        if req.department_code is not None:
+            ticket.ai_result.department_code = ticket.dept_code
+        if req.legal_basis is not None:
+            ticket.ai_result.legal_basis = req.legal_basis
+    else:
+        new_ai = AIResult(
+            ticket_id=ticket.ticket_id,
+            extracted_text=req.extracted_text or ticket.raw_text or "",
+            summary=req.summary or "Đơn phản ánh",
+            department_code=ticket.dept_code or "SO_GTVT",
+            priority=ticket.priority or "TRUNG_BINH",
+            entities_json=json.dumps({"locations": [], "issues": []}),
+            legal_basis=req.legal_basis or "",
+            draft_reply=req.draft_reply or "",
+            confidence_score=0.95
+        )
+        db.add(new_ai)
+        ticket.ai_result = new_ai
+
+    db.commit()
+    db.refresh(ticket)
+    return {
+        "success": True,
+        "message": "Đã lưu bản thảo phản hồi thành công.",
+        "ticket": format_ticket_detail(ticket)
+    }
+
+
+def toggle_ticket_star_service(
+    db: Session,
+    ticket_id: int,
+    is_starred: Optional[bool] = None,
+    *,
+    current_user: Optional[dict] = None
+) -> Dict[str, Any]:
+    """Cán bộ đánh dấu sao ưu tiên hoặc bỏ đánh dấu sao hồ sơ."""
+    ticket = _get_staff_ticket(db, ticket_id, current_user, for_update=True)
+    if is_starred is not None:
+        ticket.is_starred = bool(is_starred)
+    else:
+        ticket.is_starred = not bool(getattr(ticket, "is_starred", False))
+
+    db.commit()
+    db.refresh(ticket)
+    return {
+        "success": True,
+        "ticket_id": ticket_id,
+        "is_starred": bool(ticket.is_starred),
+        "message": "Đã đánh dấu sao hồ sơ." if ticket.is_starred else "Đã bỏ đánh dấu sao hồ sơ."
+    }
+
+
 def get_system_stats_service(db: Session) -> Dict[str, Any]:
     """Tổng hợp số liệu thống kê giám sát hệ thống cho Quản trị viên."""
     tickets = db.query(Ticket).all()
     total = len(tickets)
 
-    by_dept = {
-        "SO_GTVT": 0,
-        "SO_TNMT": 0,
-        "SO_XD": 0,
-        "SO_XAYDUNG": 0,
-        "UBND_CAP_HUYEN": 0,
-        "UBND_TINH": 0,
-        "REQUIRE_HUMAN_REVIEW": 0
-    }
+    # Nạp danh sách các cơ quan chuẩn từ Single Source of Truth
+    from core.departments import CANONICAL_DEPARTMENTS, DEPT_NAMES
+    departments_data = {}
+    for d in CANONICAL_DEPARTMENTS:
+        departments_data[d["code"]] = {
+            "code": d["code"],
+            "name": d["name"],
+            "short_name": d.get("short_name", d["name"]),
+            "count": 0
+        }
+
+    try:
+        db_depts = db.query(Department).all()
+        for d in db_depts:
+            code = d.dept_code
+            if code == "SO_XAYDUNG":
+                code = "SO_XD"
+            elif code == "SO_YT":
+                code = "SO_YTE"
+            if code not in departments_data:
+                departments_data[code] = {
+                    "code": code,
+                    "name": d.dept_name or DEPT_NAMES.get(code, code),
+                    "count": 0
+                }
+    except Exception:
+        pass
 
     by_status = {
         "ROUTED": 0,
         "APPROVED": 0,
         "REJECTED": 0,
         "HUMAN_REVIEW": 0,
-        "PROCESSING": 0
+        "PROCESSING": 0,
+        "AI_FAILED": 0
     }
 
     conf_scores = []
 
     for t in tickets:
-        d = t.dept_code or "REQUIRE_HUMAN_REVIEW"
-        if d in by_dept:
-            by_dept[d] += 1
-        elif d == "SO_XAYDUNG":
-            by_dept["SO_XD"] += 1
-        else:
-            by_dept[d] = by_dept.get(d, 0) + 1
-
+        # Thống kê trạng thái
         st = t.status or "ROUTED"
         by_status[st] = by_status.get(st, 0) + 1
 
-        if t.ai_result and t.ai_result.confidence_score:
+        if t.ai_result and t.ai_result.confidence_score is not None:
             conf_scores.append(t.ai_result.confidence_score)
 
-    so_xd_total = by_dept.get("SO_XD", 0) + by_dept.get("SO_XAYDUNG", 0)
-    by_dept["SO_XD"] = so_xd_total
-    by_dept["SO_XAYDUNG"] = so_xd_total
+        # Phân loại cơ quan không đếm trùng REQUIRE_HUMAN_REVIEW
+        is_human_review = (
+            t.dept_code == "REQUIRE_HUMAN_REVIEW"
+            or t.status in ("HUMAN_REVIEW", "AI_FAILED")
+        )
 
-    avg_conf = round(sum(conf_scores) / len(conf_scores), 2) if conf_scores else 0.95
+        if is_human_review:
+            dept_key = "REQUIRE_HUMAN_REVIEW"
+        else:
+            raw_dept = t.dept_code or "REQUIRE_HUMAN_REVIEW"
+            if raw_dept in ("SO_XAYDUNG", "SO_XD"):
+                dept_key = "SO_XD"
+            elif raw_dept in ("SO_YT", "SO_YTE"):
+                dept_key = "SO_YTE"
+            else:
+                dept_key = raw_dept
+
+        if dept_key not in departments_data:
+            departments_data[dept_key] = {
+                "code": dept_key,
+                "name": t.dept_name or DEPT_NAMES.get(dept_key, dept_key),
+                "count": 0
+            }
+
+        departments_data[dept_key]["count"] += 1
+
+    avg_conf = round(sum(conf_scores) / len(conf_scores), 2) if conf_scores else 0.0
 
     return {
         "total_tickets": total,
-        "departments": {
-            "SO_GTVT": {"code": "SO_GTVT", "name": "Sở Giao thông Vận tải", "count": by_dept.get("SO_GTVT", 0)},
-            "SO_TNMT": {"code": "SO_TNMT", "name": "Sở Tài nguyên & Môi trường", "count": by_dept.get("SO_TNMT", 0)},
-            "SO_XD": {"code": "SO_XD", "name": "Sở Xây dựng", "count": so_xd_total},
-            "UBND_CAP_HUYEN": {"code": "UBND_CAP_HUYEN", "name": "UBND Cấp Huyện / TP", "count": by_dept.get("UBND_CAP_HUYEN", 0)},
-            "UBND_TINH": {"code": "UBND_TINH", "name": "UBND Tỉnh Đồng Nai", "count": by_dept.get("UBND_TINH", 0)},
-            "REQUIRE_HUMAN_REVIEW": {"code": "REQUIRE_HUMAN_REVIEW", "name": "Hàng Đợi Ngoại Lệ", "count": by_dept.get("REQUIRE_HUMAN_REVIEW", 0) + by_status.get("HUMAN_REVIEW", 0)}
-        },
+        "departments": departments_data,
         "status_counts": by_status,
         "ai_avg_confidence": avg_conf,
         "ai_avg_confidence_percent": int(avg_conf * 100)
@@ -870,31 +1183,37 @@ def get_system_stats_service(db: Session) -> Dict[str, Any]:
 
 def get_citizen_tickets_service(
     db: Session,
-    current_user: Optional[Dict[str, Any]] = None,
+    current_user: Optional[dict] = None,
     email: Optional[str] = None
 ) -> List[Dict[str, Any]]:
-    """
-    Lấy toàn bộ các đơn đã gửi gắn với tài khoản công dân đang đăng nhập:
-    - Đơn nộp trực tiếp trên web (theo user_id hoặc email)
-    - Đơn gửi từ địa chỉ email đã đăng ký tới tiepnhandonthu@dongnai.gov.vn (nguồn EMAIL)
-    """
-    conditions = []
-    
-    user_email = None
-    if current_user:
-        u_id = current_user.get("user_id")
-        if u_id:
-            conditions.append(Ticket.user_id == u_id)
-        user_email = current_user.get("email") or current_user.get("gmail_account")
+    """Lấy danh sách đơn thư của tài khoản công dân đã xác thực (Bảo vệ IDOR / Chống tiết lộ thông tin PII)."""
+    if not current_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Yêu cầu đăng nhập để xem danh sách lịch sử đơn thư cá nhân."
+        )
 
-    target_email = email.strip().lower() if email and email.strip() else (user_email.strip().lower() if user_email else None)
-    
-    if target_email:
-        conditions.append(func.lower(Ticket.citizen_email) == target_email)
+    user_role = current_user.get("role", "CITIZEN")
+    user_id = current_user.get("user_id")
+    user_email = (current_user.get("email") or current_user.get("gmail_account") or "").strip().lower()
+
+    conditions = []
+
+    # Nếu là Cán bộ hoặc Admin, cho phép lọc theo email công dân cụ thể
+    if user_role in ("ADMIN", "OFFICER") and email and email.strip():
+        conditions.append(func.lower(Ticket.citizen_email) == email.strip().lower())
+    else:
+        # Công dân: Chỉ xem được đơn gắn với user_id hoặc email chính chủ của mình
+        if user_id:
+            conditions.append(Ticket.user_id == user_id)
+        if user_email:
+            conditions.append(and_(
+                Ticket.user_id.is_(None),
+                func.lower(Ticket.citizen_email) == user_email
+            ))
 
     if not conditions:
         return []
 
     tickets = db.query(Ticket).filter(or_(*conditions)).order_by(Ticket.created_at.desc()).all()
     return [format_ticket_detail(t) for t in tickets]
-

@@ -1,18 +1,15 @@
 import React, { useState, useEffect, forwardRef } from 'react';
 import PropTypes from 'prop-types';
-import { 
-  Search, CheckCircle2, Clock, FileText 
-} from 'lucide-react';
+import { Search, Copy, Check, AlertCircle, Building2, Calendar, FileText } from 'lucide-react';
 import { api } from '../../../services/api';
-import { formatDeptName } from '../../../utils/formatters';
-import AiRoutingResultCard from './AiRoutingResultCard';
 import ComplaintProgressTimeline from './ComplaintProgressTimeline';
+import AiRoutingResultCard from './AiRoutingResultCard';
+import { formatDeptName } from '../../../utils/formatters';
 
 /**
- * Khung Tra Cứu Tiến Độ Xử Lý Đơn Thư Trực Tuyến
- * 
- * @param {Object} props
- * @param {string} props.initialCode - Mã hồ sơ điền sẵn (từ biên nhận)
+ * Khung Tra Cứu Tiến Độ Xử Lý Đơn Thư
+ * - Large tracking code + copy button + 3-step progress
+ * - Clean administrative styling
  */
 const ComplaintTrackingSection = forwardRef(function ComplaintTrackingSection(
   { initialCode = '' }, 
@@ -22,6 +19,7 @@ const ComplaintTrackingSection = forwardRef(function ComplaintTrackingSection(
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [lookupResult, setLookupResult] = useState(null);
   const [lookupError, setLookupError] = useState(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (initialCode) {
@@ -40,7 +38,7 @@ const ComplaintTrackingSection = forwardRef(function ComplaintTrackingSection(
       const ticket = await api.lookupTicket(code.trim());
       setLookupResult(ticket);
     } catch (err) {
-      setLookupError(err.message || 'Không tìm thấy hồ sơ với mã tra cứu trên.');
+      setLookupError(err.response?.data?.detail || 'Không tìm thấy hồ sơ với mã đã nhập. Vui lòng kiểm tra lại.');
     } finally {
       setIsLookingUp(false);
     }
@@ -51,43 +49,52 @@ const ComplaintTrackingSection = forwardRef(function ComplaintTrackingSection(
     executeLookup(lookupCode);
   };
 
-  const sampleCodes = ['ĐN-20261112-001', 'ĐN-20261112-002', 'ĐN-20261112-5944'];
+  const handleCopy = (code) => {
+    if (code) {
+      navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 3000);
+    }
+  };
+
+  const sampleCodes = ['ĐN-20261112-001', 'ĐN-20261112-002'];
 
   return (
-    <div ref={ref} className="gov-card p-5 sm:p-6 space-y-5 scroll-mt-20">
-      <div className="border-b border-slate-200/80 pb-3">
-        <div className="flex items-center gap-2">
-          <Search className="w-5 h-5 text-gov-blue" />
-          <h3 className="text-base sm:text-lg font-bold text-slate-900 uppercase">
-            Tra Cứu Tiến Độ Xử Lý Đơn Thư Trực Tuyến
-          </h3>
-        </div>
-        <p className="text-xs text-slate-500 mt-0.5">
-          Nhập mã hồ sơ đã được cấp khi gửi đơn để theo dõi hành trình thẩm định và nhận văn bản trả lời chính thức.
+    <div ref={ref} className="bg-white border border-[#E2E8F0] rounded-2xl p-5 sm:p-6 space-y-5 shadow-xs scroll-mt-20">
+      <div className="border-b border-[#E2E8F0] pb-3">
+        <h3 className="text-base sm:text-lg font-bold text-[#1F1F1F] flex items-center gap-2">
+          <Search className="w-5 h-5 text-[#0B57D0]" />
+          <span>Tra Cứu Tiến Độ Xử Lý Đơn Thư</span>
+        </h3>
+        <p className="text-xs text-[#5F6368] mt-0.5">
+          Nhập mã biên nhận điện tử để theo dõi kết quả thụ lý và nhận công văn trả lời chính thức.
         </p>
       </div>
 
       {/* Form tra cứu */}
       <form onSubmit={handleLookupSubmit} className="flex flex-col sm:flex-row gap-2.5">
-        <input
-          type="text"
-          value={lookupCode}
-          onChange={(e) => setLookupCode(e.target.value)}
-          placeholder="Nhập mã tra cứu hồ sơ (Ví dụ: ĐN-20261112-001)"
-          className="gov-input font-mono uppercase text-sm sm:text-base flex-1 py-2.5"
-        />
+        <div className="relative flex-1">
+          <Search className="w-4 h-4 text-[#5F6368] absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={lookupCode}
+            onChange={(e) => setLookupCode(e.target.value)}
+            placeholder="Nhập mã tra cứu (Ví dụ: ĐN-20261112-001)"
+            className="w-full bg-[#EAF1FB]/50 border border-[#E2E8F0] rounded-full pl-10 pr-4 py-2.5 text-xs sm:text-sm font-mono uppercase text-[#1F1F1F] focus:outline-none focus:bg-white focus:border-[#0B57D0]"
+          />
+        </div>
         <button
           type="submit"
           disabled={isLookingUp}
-          className="gov-btn-primary py-2.5 px-6 text-sm font-semibold shrink-0 cursor-pointer shadow-xs"
+          className="bg-[#0B57D0] hover:bg-[#0842A0] text-white py-2.5 px-6 rounded-full text-xs sm:text-sm font-semibold shrink-0 transition-colors shadow-xs disabled:opacity-50"
         >
-          {isLookingUp ? 'Đang Tra Cứu...' : 'Tra Cứu Tiến Độ'}
+          {isLookingUp ? 'Đang Tra Cứu...' : 'Tra Cứu'}
         </button>
       </form>
 
-      {/* Mã mẫu thử nghiệm */}
-      <div className="text-xs text-slate-500 flex flex-wrap items-center gap-1.5">
-        <span>Mã mẫu thử nghiệm:</span>
+      {/* Quick sample buttons */}
+      <div className="text-xs text-[#5F6368] flex flex-wrap items-center gap-1.5">
+        <span>Mã mẫu:</span>
         {sampleCodes.map((code) => (
           <button
             key={code}
@@ -96,77 +103,88 @@ const ComplaintTrackingSection = forwardRef(function ComplaintTrackingSection(
               setLookupCode(code);
               executeLookup(code);
             }}
-            className="font-mono text-gov-blue hover:underline font-semibold bg-blue-50 px-2 py-0.5 rounded border border-blue-100"
+            className="font-mono text-xs text-[#0B57D0] bg-[#EAF1FB] hover:bg-[#d8e7fc] px-2.5 py-0.5 rounded-full transition-colors"
           >
             {code}
           </button>
         ))}
       </div>
 
+      {/* Error state */}
       {lookupError && (
-        <div className="p-3 bg-amber-50 border-l-3 border-amber-500 text-amber-900 text-xs sm:text-sm rounded-r-md">
-          {lookupError}
+        <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-800 text-xs sm:text-sm rounded-xl flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+          <span>{lookupError}</span>
         </div>
       )}
 
-      {/* KẾT QUẢ TRA CỨU TIẾN ĐỘ VỚI THANH TRẠNG THÁI 3 BƯỚC */}
+      {/* Result View */}
       {lookupResult && (
-        <div className="pt-4 border-t border-slate-100 space-y-4 animate-fade-in">
-          
-          {/* Header kết quả */}
-          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50/70 p-3.5 rounded-lg border border-slate-200/80">
+        <div className="space-y-4 pt-2 border-t border-[#E2E8F0]">
+          {/* Large Tracking Code + Copy button */}
+          <div className="bg-[#EAF1FB] border border-blue-200 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-3">
             <div>
-              <span className="text-[11px] font-semibold uppercase text-slate-500 block">
-                Mã Hồ Sơ Tra Cứu:
+              <span className="text-[11px] font-bold uppercase tracking-wider text-[#0B57D0] block">
+                MÃ TRA CỨU HỒ SƠ
               </span>
-              <span className="text-xl font-mono font-bold text-gov-blue">
-                {lookupResult.tracking_code}
-              </span>
+              <div className="text-2xl sm:text-3xl font-mono font-black text-[#041E49] tracking-wider select-all mt-0.5">
+                {lookupResult.tracking_code || lookupResult.ticket_code}
+              </div>
+              <div className="text-xs text-[#5F6368] mt-1 flex items-center gap-2">
+                <span>Người gửi: <strong>{lookupResult.citizen_name || 'Công dân'}</strong></span>
+                <span>•</span>
+                <span>Đơn vị: <strong>{formatDeptName(lookupResult.dept_code, lookupResult.dept_name)}</strong></span>
+              </div>
             </div>
 
-            <div className="text-right">
-              <span className="text-[11px] text-slate-500 block">Đơn vị chủ trì:</span>
-              <span className="text-xs sm:text-sm font-semibold text-slate-900">
-                {formatDeptName(lookupResult.dept_code, lookupResult.dept_name) || 'Đang thẩm tra'}
-              </span>
-            </div>
+            <button
+              type="button"
+              onClick={() => handleCopy(lookupResult.tracking_code || lookupResult.ticket_code)}
+              className="bg-white hover:bg-slate-50 text-[#0B57D0] border border-blue-300 font-semibold text-xs px-4 py-2 rounded-full flex items-center gap-1.5 transition-colors shadow-2xs"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-4 h-4 text-emerald-600" />
+                  <span className="text-emerald-700">Đã sao chép</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4" />
+                  <span>Sao chép mã</span>
+                </>
+              )}
+            </button>
           </div>
 
-          {/* TIẾN TRÌNH 4 BƯỚC CHUẨN HÀNH CHÍNH CÔNG (ĐỒNG BỘ TUYỆT ĐỐI) */}
-          <ComplaintProgressTimeline ticket={lookupResult} />
+          {/* 3-Step Progress */}
+          <div className="bg-slate-50 p-4 rounded-2xl border border-[#E2E8F0]">
+            <span className="text-xs font-semibold text-[#5F6368] block mb-2">
+              Tiến trình giải quyết đơn thư:
+            </span>
+            <ComplaintProgressTimeline ticket={lookupResult} />
+          </div>
 
-          {/* KẾT QUẢ AI PHÂN TÍCH & ĐIỀU PHỐI */}
-          <AiRoutingResultCard ticket={lookupResult} />
-
-          {/* Nội dung phản ánh gốc */}
-          <div className="bg-slate-50/70 p-3.5 rounded-lg border border-slate-200/80 space-y-1.5 text-xs sm:text-sm">
-            <span className="text-[11px] font-semibold uppercase text-slate-500 block">Nội dung phản ánh gốc:</span>
-            <p className="text-slate-800 leading-relaxed italic">
-              "{lookupResult.raw_text}"
+          {/* Details */}
+          <div className="bg-white p-4 rounded-xl border border-[#E2E8F0] space-y-2 text-xs">
+            <div className="font-semibold text-[#1F1F1F] text-sm">
+              Trích yếu nội dung:
+            </div>
+            <p className="text-[#5F6368] leading-relaxed">
+              {lookupResult.ai_result?.summary || lookupResult.raw_text}
             </p>
-          </div>
 
-          {/* VĂN BẢN TRẢ LỜI CHÍNH THỨC */}
-          {lookupResult.ai_result?.draft_reply && (
-            <div className="bg-blue-50/40 border border-blue-200 rounded-xl p-4 sm:p-5 space-y-2.5">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-blue-100 pb-2">
-                <div className="flex items-center gap-1.5">
-                  <FileText className="w-4 h-4 text-gov-blue" />
-                  <span className="text-xs font-bold uppercase text-gov-blue">
-                    Văn Bản Trả Lời Công Dân Của Cơ Quan Nhà Nước
-                  </span>
-                </div>
-                <span className="text-xs text-slate-500">
-                  Căn cứ: <strong className="text-slate-700">{lookupResult.ai_result.legal_basis}</strong>
+            {/* Official Reply if Approved */}
+            {lookupResult.status === 'APPROVED' && lookupResult.ai_result?.draft_reply && (
+              <div className="mt-3 pt-3 border-t border-[#E2E8F0] bg-emerald-50/50 p-3 rounded-xl border border-emerald-200">
+                <span className="font-bold text-emerald-900 block mb-1">
+                  Công văn phản hồi chính thức:
                 </span>
+                <div className="font-mono text-xs text-[#1F1F1F] whitespace-pre-line leading-relaxed">
+                  {lookupResult.ai_result.draft_reply}
+                </div>
               </div>
-
-              <div className="bg-white p-4 rounded-lg border border-blue-100/80 text-slate-900 text-sm leading-relaxed font-normal shadow-2xs whitespace-pre-line">
-                {lookupResult.ai_result.draft_reply}
-              </div>
-            </div>
-          )}
-
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -178,4 +196,3 @@ ComplaintTrackingSection.propTypes = {
 };
 
 export default ComplaintTrackingSection;
-

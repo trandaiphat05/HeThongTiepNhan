@@ -1,0 +1,77 @@
+[
+  {
+    "name": "RAG Ingest Unauthenticated",
+    "status": "PASS",
+    "details": "Status: 401"
+  },
+  {
+    "name": "Admin RAG Unauthenticated",
+    "status": "PASS",
+    "details": "Status: 401"
+  },
+  {
+    "name": "RAG Ingest Citizen Forbidden",
+    "status": "PASS",
+    "details": "Status: 403"
+  },
+  {
+    "name": "RAG Ingest Officer Forbidden",
+    "status": "PASS",
+    "details": "Status: 403"
+  },
+  {
+    "name": "RAG Reject .bat File",
+    "status": "PASS",
+    "details": "Status: 400 ({\"detail\":\"Định dạng tệp '.bat' không được hỗ trợ. Chỉ chấp nhận các định dạng văn bản quy chuẩn: .p)"
+  },
+  {
+    "name": "RAG Reject .exe File",
+    "status": "PASS",
+    "details": "Status: 400 ({\"detail\":\"Định dạng tệp '.exe' không được hỗ trợ. Chỉ chấp nhận các định dạng văn bản quy chuẩn: .p)"
+  },
+  {
+    "name": "DELETE RAG Doc Unauthenticated",
+    "status": "PASS",
+    "details": "Status: 401"
+  },
+  {
+    "name": "DELETE RAG Doc Citizen Forbidden",
+    "status": "PASS",
+    "details": "Status: 403"
+  },
+  {
+    "name": "DELETE RAG Doc Officer Forbidden",
+    "status": "PASS",
+    "details": "Status: 403"
+  },
+  {
+    "name": "POST /api/gmail/disconnect Unauthenticated",
+    "status": "PASS",
+    "details": "Status: 401"
+  },
+  {
+    "name": "POST /api/notifications/disconnect-gmail Unauthenticated",
+    "status": "PASS",
+    "details": "Status: 401"
+  },
+  {
+    "name": "GET /api/citizen/my-tickets Unauthenticated",
+    "status": "PASS",
+    "details": "Status: 401"
+  },
+  {
+    "name": "GET /api/citizen/my-tickets Authenticated",
+    "status": "PASS",
+    "details": "Status: 200"
+  },
+  {
+    "name": "Reject Reassign on APPROVED Ticket",
+    "status": "PASS",
+    "details": "Status: 400 ({\"detail\":\"Hồ sơ ĐN-20261120-9604 đã ở trạng thái APPROVED (đã ban hành phản hồi hoặc đóng/từ chối),)"
+  },
+  {
+    "name": "Reject Draft Edit on APPROVED Ticket",
+    "status": "PASS",
+    "details": "Status: 400 ({\"detail\":\"Hồ sơ ĐN-20261120-9604 đã ở trạng thái APPROVED (đã ban hành văn bản chính thức hoặc đóng)"
+  }
+]

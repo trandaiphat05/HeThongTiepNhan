@@ -1,0 +1,147 @@
+{
+  "console_errors": [
+    "[Officer][Desktop_1440x900][ERROR] Failed to load resource: the server responded with a status of 400 (Bad Request)",
+    "[Officer][Desktop_1440x900][ERROR] Failed to load resource: the server responded with a status of 400 (Bad Request)"
+  ],
+  "console_warnings": [
+    "[Officer][Desktop_1440x900][WARNING] [Axios API Error] [PUT /api/tickets/72/draft]: Hồ sơ ĐN-20261120-9604 đã ở trạng thái APPROVED (đã ban hành văn bản chính thức hoặc đóng/từ chối), không thể chỉnh sửa bản thảo.",
+    "[Officer][Desktop_1440x900][WARNING] [Axios API Error] [PUT /api/tickets/72/reassign]: Hồ sơ ĐN-20261120-9604 đã ở trạng thái APPROVED (đã ban hành phản hồi hoặc đóng/từ chối), không thể chuyển tuyến lại."
+  ],
+  "page_errors": [],
+  "http_errors": [
+    "[Officer][Desktop_1440x900][HTTP_400] PUT http://localhost:5173/api/tickets/72/draft",
+    "[Officer][Desktop_1440x900][HTTP_400] PUT http://localhost:5173/api/tickets/72/reassign"
+  ],
+  "test_cases": [
+    {
+      "code": "LOGIN-01",
+      "title": "Giao diện Đăng nhập tinh gọn",
+      "status": "PASS",
+      "details": "Hiển thị 3 nút demo chính (Công dân, Cán bộ GTVT, Quản trị viên)"
+    },
+    {
+      "code": "LOGIN-02",
+      "title": "Dropdown kiểm thử các Sở/Ngành khác",
+      "status": "PASS",
+      "details": "Dropdown chọn Sở/Ban/Ngành hỗ trợ kiểm thử chuyên sâu hoạt động tốt"
+    },
+    {
+      "code": "CIT-GMAIL-01",
+      "title": "Ẩn nút Gmail Sync trên Topbar đối với Công Dân",
+      "status": "PASS",
+      "details": "Nút Gmail trên topbar đã được ẩn triệt để cho Công dân"
+    },
+    {
+      "code": "CIT-01",
+      "title": "Xóa bỏ 100% Nút Camera & Thuộc tính Capture",
+      "status": "PASS",
+      "details": "0 nút camera, 0 thuộc tính capture trong DOM"
+    },
+    {
+      "code": "CIT-02",
+      "title": "Khung tải ảnh Full-Width duy nhất chuẩn Gmail",
+      "status": "PASS",
+      "details": "1 upload box duy nhất chuẩn Gmail"
+    },
+    {
+      "code": "CIT-RECEIPT-01",
+      "title": "Xóa bỏ Double Modal sau khi nộp đơn",
+      "status": "PASS",
+      "details": "Không còn modal đè; hiển thị 1 Biên nhận điện tử duy nhất tại chỗ"
+    },
+    {
+      "code": "CIT-03",
+      "title": "Gửi đơn thư thành công & Nhận mã biên nhận",
+      "status": "PASS",
+      "details": "Mã hồ sơ: ĐN-20261120-2845"
+    },
+    {
+      "code": "CIT-04",
+      "title": "F5 Persistence: Tra cứu hồ sơ sau reload F5",
+      "status": "PASS",
+      "details": "Hồ sơ ĐN-20261120-2845 hiển thị chính xác sau reload"
+    },
+    {
+      "code": "CIT-MOB-01",
+      "title": "Giao diện Công dân trên Mobile (390x844)",
+      "status": "PASS",
+      "details": "Khung tải ảnh co giãn chuẩn, hiển thị đầy đủ trên mobile"
+    },
+    {
+      "code": "OFF-GMAIL-01",
+      "title": "Nút Gmail Sync trên Topbar cho Cán bộ",
+      "status": "PASS",
+      "details": "Nút Gmail hiển thị chuẩn trên topbar của Cán bộ"
+    },
+    {
+      "code": "OFF-01",
+      "title": "F5 Persistence: Đánh dấu sao ưu tiên (Star Toggle)",
+      "status": "PASS",
+      "details": "Tìm thấy 3 sao vàng sau khi F5"
+    },
+    {
+      "code": "OFF-02",
+      "title": "F5 Persistence: Lưu nháp bản thảo (Save Draft)",
+      "status": "FAIL",
+      "details": "Mất dữ liệu dự thảo sau F5! Nhận được: 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM / Độc lập - Tự do - Hạnh '"
+    },
+    {
+      "code": "OFF-03",
+      "title": "F5 Persistence: Chuyển tuyến hồ sơ (Reassign)",
+      "status": "PASS",
+      "details": "Đã chuyển tuyến hồ sơ sang Sở Xây dựng"
+    },
+    {
+      "code": "OFF-04",
+      "title": "F5 Persistence: Phê duyệt hồ sơ (Approve)",
+      "status": "PASS",
+      "details": "Phê duyệt hồ sơ thành công và lưu trạng thái vào CSDL"
+    },
+    {
+      "code": "OFF-MOB-01",
+      "title": "Giao diện Cán bộ trên Mobile (390x844)",
+      "status": "PASS",
+      "details": "Màn hình Officer Workspace co giãn linh hoạt trên mobile"
+    },
+    {
+      "code": "ADM-GMAIL-01",
+      "title": "Nút Gmail Sync trên Topbar cho Quản Trị Viên",
+      "status": "PASS",
+      "details": "Nút Gmail hiển thị chuẩn trên topbar Admin"
+    },
+    {
+      "code": "ADM-01",
+      "title": "F5 Persistence: Khóa / Mở khóa người dùng (Lock/Unlock User)",
+      "status": "PASS",
+      "details": "Trạng thái nút chuyển từ 'Tạm Khóa' -> 'Phê Duyệt' bền vững sau F5"
+    },
+    {
+      "code": "ADM-02",
+      "title": "F5 Persistence: Thêm văn bản luật mới vào RAG",
+      "status": "PASS",
+      "details": "Tìm thấy 'Nghị định 99/2026/NĐ-CP Mega Audit 1795170649' trong kho sau F5"
+    },
+    {
+      "code": "ADM-03",
+      "title": "F5 Persistence: Xóa văn bản luật khỏi RAG",
+      "status": "FAIL",
+      "details": "'Nghị định 99/2026/NĐ-CP Mega Audit 1795170649' vẫn còn tồn tại sau khi xóa"
+    },
+    {
+      "code": "ADM-MOB-01",
+      "title": "Giao diện Admin Dashboard trên Mobile (390x844)",
+      "status": "PASS",
+      "details": "Dashboard hiển thị đầy đủ, không vỡ layout"
+    }
+  ],
+  "f5_persistence_checks": {
+    "citizen_submit_f5": true,
+    "officer_star_f5": true,
+    "officer_save_draft_f5": false,
+    "officer_reassign_f5": true,
+    "officer_approve_f5": true,
+    "admin_lock_user_f5": true,
+    "admin_add_law_f5": true,
+    "admin_delete_law_f5": false
+  }
+}

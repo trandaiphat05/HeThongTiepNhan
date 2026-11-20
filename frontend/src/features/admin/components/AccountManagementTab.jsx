@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { api } from '../../../services/api';
-import UserTable from './accounts/UserTable';
-import UserModal from './accounts/UserModal';
-import EmailWorkerCard from './accounts/EmailWorkerCard';
-import PendingOfficerApprovals from './accounts/PendingOfficerApprovals';
+import UserTable from './UserTable';
+import UserModal from './UserModal';
+import EmailWorkerCard from './EmailWorkerCard';
+import PendingOfficerApprovals from './PendingOfficerApprovals';
 
 /**
  * Tab Quản lý Tài khoản Cán bộ & Trạng thái Email Worker

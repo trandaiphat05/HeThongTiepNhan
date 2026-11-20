@@ -6,7 +6,7 @@ Tuân thủ chuẩn Unicode (NVARCHAR / NVARCHAR(MAX)) cho Microsoft SQL Server 
 
 from datetime import datetime
 from sqlalchemy import (
-    Column, Integer, Unicode, UnicodeText, Float, Boolean, DateTime, ForeignKey
+    Column, Integer, Unicode, UnicodeText, Float, Boolean, DateTime, ForeignKey, event, inspect
 )
 from sqlalchemy.dialects.mssql import NVARCHAR
 from sqlalchemy.orm import relationship
@@ -18,7 +18,7 @@ from modules.database.connection import Base
 NVarCharMax = UnicodeText().with_variant(NVARCHAR(None), "mssql")
 
 
-# 1. Bảng Phòng Ban Chuyên Trách (departments)
+# Bảng Phòng Ban Chuyên Trách (departments)
 class Department(Base):
     __tablename__ = "departments"
 
@@ -62,7 +62,7 @@ dept_header_map = {
     "REQUIRE_HUMAN_REVIEW": ("TỔ TIẾP NHẬN & ĐIỀU PHỐI ĐƠN THƯ TỈNH ĐỒNG NAI", "Số: .../TB-TĐP"),
 }
 
-# 2. Bảng Người Dùng & Cán Bộ (users)
+# Bảng Người Dùng & Cán Bộ (users)
 class User(Base):
     __tablename__ = "users"
 
@@ -84,7 +84,16 @@ class User(Base):
     tickets = relationship("Ticket", back_populates="user")
 
 
-# 3. Bảng Hồ Sơ Đơn Thư Tiếp Nhận (tickets)
+class TicketStatus:
+    PROCESSING = "PROCESSING"
+    ROUTED = "ROUTED"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    HUMAN_REVIEW = "HUMAN_REVIEW"
+    AI_FAILED = "AI_FAILED"
+
+
+# Bảng Hồ Sơ Đơn Thư Tiếp Nhận (tickets)
 class Ticket(Base):
     __tablename__ = "tickets"
 
@@ -99,10 +108,11 @@ class Ticket(Base):
     raw_text = Column(NVarCharMax, nullable=True)
     image_url = Column(Unicode(500), nullable=True)
     image_urls = Column(NVarCharMax, nullable=True)  # Chuỗi JSON mảng các đường dẫn ảnh: '["/uploads/img1.jpg", ...]'
-    status = Column(Unicode(30), default="PROCESSING")  # 'PROCESSING', 'ROUTED', 'APPROVED', 'REJECTED', 'HUMAN_REVIEW'
+    status = Column(Unicode(30), default="PROCESSING")  # 'PROCESSING', 'ROUTED', 'APPROVED', 'REJECTED', 'HUMAN_REVIEW', 'AI_FAILED'
     dept_code = Column(Unicode(50), ForeignKey("departments.dept_code"), nullable=True)
     dept_name = Column(Unicode(255), nullable=True)
     priority = Column(Unicode(20), default="TRUNG_BINH")  # 'CAO', 'TRUNG_BINH', 'THAP'
+    is_starred = Column(Boolean, default=False, nullable=True)  # Đánh dấu sao ưu tiên
     admin_note = Column(NVarCharMax, nullable=True)
     rejection_reason = Column(NVarCharMax, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -130,7 +140,35 @@ class Ticket(Base):
 
 
 
-# 4. Bảng Kết Quả Bóc Tách từ Gemini AI (ai_results)
+class TicketStatusEvent(Base):
+    __tablename__ = "ticket_status_events"
+
+    event_id = Column(Integer, primary_key=True)
+    ticket_id = Column(Integer, ForeignKey("tickets.ticket_id", ondelete="CASCADE"), nullable=False, index=True)
+    status = Column(Unicode(30), nullable=False)
+    occurred_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+def _record_ticket_status(connection, ticket):
+    connection.execute(TicketStatusEvent.__table__.insert().values(
+        ticket_id=ticket.ticket_id,
+        status=ticket.status,
+        occurred_at=ticket.updated_at or datetime.utcnow(),
+    ))
+
+
+@event.listens_for(Ticket, "after_insert")
+def _record_initial_ticket_status(mapper, connection, ticket):
+    _record_ticket_status(connection, ticket)
+
+
+@event.listens_for(Ticket, "after_update")
+def _record_ticket_status_change(mapper, connection, ticket):
+    if inspect(ticket).attrs.status.history.has_changes():
+        _record_ticket_status(connection, ticket)
+
+
+# Bảng Kết Quả Bóc Tách từ Gemini AI (ai_results)
 class AIResult(Base):
     __tablename__ = "ai_results"
 
@@ -149,7 +187,7 @@ class AIResult(Base):
     ticket = relationship("Ticket", back_populates="ai_result")
 
 
-# 5. Bảng Kho Văn Bản Pháp Luật RAG (rag_docs)
+# Bảng Kho Văn Bản Pháp Luật RAG (rag_docs)
 class RAGDoc(Base):
     __tablename__ = "rag_docs"
 

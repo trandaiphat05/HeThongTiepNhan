@@ -2,16 +2,17 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
   Landmark, User, Lock, Mail, Eye, EyeOff, UserPlus, 
-  CheckCircle2, AlertCircle, ArrowLeft, ShieldCheck, Building2,
+  CheckCircle2, AlertCircle, ArrowLeft, ShieldCheck,
   Phone, Briefcase, Clock, Shield
 } from 'lucide-react';
 import { authService } from '../../services/authService';
+import { DEPARTMENTS } from '../../constants/departments';
 
 /**
  * Trang Đăng Ký Tài Khoản - Cổng Dịch Vụ Công & Phân Hệ Cán Bộ Tỉnh Đồng Nai
  * Phân luồng:
  * 1. Tài khoản Công dân: Họ tên, Email cá nhân, Số điện thoại, Mật khẩu -> Kích hoạt ngay lập tức.
- * 2. Tài khoản Cán bộ: Họ tên, Email công vụ (@dongnai.gov.vn), Mã số cán bộ, Đơn vị công tác, Mật khẩu -> Chờ Quản trị viên duyệt.
+ * 2. Tài khoản Cán bộ: Họ tên, Email công vụ (@dongnai.gov.vn), Số điện thoại, Mã số cán bộ, Đơn vị công tác, Mật khẩu -> Chờ Quản trị viên duyệt.
  */
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -36,13 +37,7 @@ export default function RegisterPage() {
   const [errorMessage, setErrorMessage] = useState(null);
   const [successResult, setSuccessResult] = useState(null); // { type: 'CITIZEN' | 'OFFICER', user, message }
 
-  const departments = [
-    { code: 'SO_GTVT', name: 'Sở Giao thông Vận tải' },
-    { code: 'SO_TNMT', name: 'Sở Tài nguyên & Môi trường' },
-    { code: 'SO_XD', name: 'Sở Xây dựng' },
-    { code: 'CONG_AN_TINH', name: 'Công an Tỉnh Đồng Nai' },
-    { code: 'UBND_CAP_HUYEN', name: 'UBND Cấp Huyện / TP' },
-  ];
+  const departments = DEPARTMENTS;
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
@@ -77,24 +72,30 @@ export default function RegisterPage() {
       return;
     }
 
+    const cleanPhone = formData.phone.trim().replace(/\s+/g, '');
+    const phoneRegex = /^(0|\+84)[0-9]{9,10}$/;
+
     // 2. Kiểm tra theo từng loại tài khoản
     if (activeTab === 'CITIZEN') {
-      if (!formData.email.trim()) {
-        setErrorMessage('Vui lòng nhập địa chỉ Email cá nhân để nhận thông báo.');
+      const emailLower = formData.email.trim().toLowerCase();
+      const citizenEmailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+      if (!emailLower || !citizenEmailRegex.test(emailLower)) {
+        setErrorMessage('Vui lòng nhập địa chỉ Email cá nhân hợp lệ để nhận thông báo.');
         return;
       }
-      if (!formData.phone.trim()) {
-        setErrorMessage('Vui lòng nhập số điện thoại liên hệ của công dân.');
+      if (!cleanPhone || !phoneRegex.test(cleanPhone)) {
+        setErrorMessage('Số điện thoại liên hệ của công dân không hợp lệ (gồm 10 số, bắt đầu bằng 0 hoặc +84).');
         return;
       }
     } else if (activeTab === 'OFFICER') {
       const emailLower = formData.email.trim().toLowerCase();
-      if (!emailLower) {
-        setErrorMessage('Vui lòng nhập địa chỉ Email công vụ.');
+      const officerEmailRegex = /^[a-zA-Z0-9._%+-]+@dongnai\.gov\.vn$/i;
+      if (!emailLower || !officerEmailRegex.test(emailLower)) {
+        setErrorMessage('Đăng ký tài khoản Cán bộ bắt buộc phải sử dụng email công vụ (@dongnai.gov.vn).');
         return;
       }
-      if (!emailLower.endsWith('@dongnai.gov.vn') && !emailLower.includes('@dongnai.gov.vn')) {
-        setErrorMessage('Đăng ký tài khoản Cán bộ bắt buộc phải sử dụng email công vụ (@dongnai.gov.vn).');
+      if (!cleanPhone || !phoneRegex.test(cleanPhone)) {
+        setErrorMessage('Số điện thoại liên hệ cán bộ không hợp lệ (gồm 10 số, bắt đầu bằng 0 hoặc +84).');
         return;
       }
       if (!formData.officer_code.trim()) {
@@ -112,10 +113,10 @@ export default function RegisterPage() {
       const payload = {
         full_name: formData.full_name.trim(),
         username: formData.username.trim().toLowerCase(),
-        email: formData.email.trim(),
+        email: formData.email.trim().toLowerCase(),
         role: activeTab,
         password: formData.password,
-        phone: activeTab === 'CITIZEN' ? formData.phone.trim() : null,
+        phone: cleanPhone || null,
         officer_code: activeTab === 'OFFICER' ? formData.officer_code.trim() : null,
         dept_code: activeTab === 'OFFICER' ? formData.dept_code : null,
       };
@@ -168,6 +169,7 @@ export default function RegisterPage() {
                   <div>• Cán bộ đăng ký: <strong className="text-slate-900">{successResult.user.full_name}</strong></div>
                   <div>• Mã số cán bộ: <strong className="font-mono text-gov-blue">{successResult.user.officer_code}</strong></div>
                   <div>• Email công vụ: <strong className="font-mono text-slate-800">{successResult.user.email}</strong></div>
+                  {successResult.user.phone && <div>• Số điện thoại: <strong className="font-mono text-slate-800">{successResult.user.phone}</strong></div>}
                   <div>• Đơn vị công tác: <strong>{deptInfo}</strong></div>
                   <div>• Tên đăng nhập: <strong className="font-mono text-gov-blue">{successResult.user.username}</strong></div>
                   <div className="pt-1 text-[11px] text-amber-800 bg-amber-50/70 p-2 rounded border border-amber-200">
@@ -236,31 +238,28 @@ export default function RegisterPage() {
 
   // ===================== FORM ĐĂNG KÝ CHÍNH =====================
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex flex-col justify-center py-10 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-[#F6F8FC] flex flex-col justify-center py-10 px-4 sm:px-6 lg:px-8">
       {/* Tiêu đề Cổng Thông Tin */}
       <div className="sm:mx-auto sm:w-full sm:max-w-lg text-center space-y-2.5">
-        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 p-0.5 shadow-xs flex items-center justify-center mx-auto">
-          <div className="w-13 h-13 rounded-full bg-[#1E3A8A] flex flex-col items-center justify-center text-center border border-amber-300">
-            <Landmark className="w-5 h-5 text-amber-300" />
-            <span className="text-[9px] font-bold tracking-tighter text-amber-200 leading-none mt-0.5">ĐỒNG NAI</span>
-          </div>
+        <div className="w-12 h-12 rounded-2xl bg-[#0B57D0] flex items-center justify-center text-white shadow-xs mx-auto">
+          <Landmark className="w-6 h-6" />
         </div>
 
         <div>
-          <span className="text-xs font-semibold tracking-wider text-[#991B1B] uppercase block mb-1">
+          <span className="text-[11px] font-semibold tracking-wider text-[#0B57D0] uppercase block mb-0.5">
             Ủy Ban Nhân Dân Tỉnh Đồng Nai
           </span>
-          <h1 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900 uppercase">
-            Cổng Thông Tin Tiếp Nhận & Điều Phối Đơn Thư
+          <h1 className="text-lg sm:text-xl font-bold tracking-tight text-[#1F1F1F]">
+            Cổng Đơn Thư Đồng Nai
           </h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Hệ thống đăng ký tài khoản tập trung cho Công dân và Cán bộ chuyên trách
+          <p className="text-xs text-[#5F6368] mt-1">
+            Đăng ký tài khoản Công dân & Cán bộ chuyên trách
           </p>
         </div>
       </div>
 
       <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-lg">
-        <div className="bg-white py-6 px-6 sm:px-8 shadow-xs border border-[#E2E8F0] rounded-lg space-y-5">
+        <div className="bg-white py-6 px-6 sm:px-8 shadow-md border border-[#E2E8F0] rounded-2xl space-y-5">
           
           {/* Header & Nút quay lại */}
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -313,7 +312,7 @@ export default function RegisterPage() {
             <p className="text-[11px] text-slate-500 pt-0.5">
               {activeTab === 'CITIZEN' 
                 ? '• Tài khoản Công dân được kích hoạt tức thì để nộp đơn trực tuyến và tra cứu tiến độ.'
-                : '• Tài khoản Cán bộ yêu cầu email công vụ @dongnai.gov.vn và sẽ được Quản trị viên thẩm định phê duyệt.'}
+                : '• Tài khoản Cán bộ dành cho công chức các Sở/Ban/Ngành và sẽ được Quản trị viên thẩm định phê duyệt.'}
             </p>
           </div>
 
@@ -395,7 +394,7 @@ export default function RegisterPage() {
               </>
             )}
 
-            {/* PHẦN DÀNH RIÊNG CHO CÁN BỘ: Email công vụ, Mã số cán bộ & Đơn vị công tác */}
+            {/* PHẦN DÀNH RIÊNG CHO CÁN BỘ: Email công vụ, Số điện thoại, Mã số cán bộ & Đơn vị công tác */}
             {activeTab === 'OFFICER' && (
               <>
                 <div>
@@ -417,11 +416,31 @@ export default function RegisterPage() {
                     />
                   </div>
                   <span className="text-[11px] text-gov-blue mt-1 block">
-                    * Bắt buộc có phần mở rộng: <strong>@dongnai.gov.vn</strong>
+                    * Yêu cầu hòm thư công vụ điện tử: <strong>@dongnai.gov.vn</strong>
                   </span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Số điện thoại liên hệ <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                        <Phone className="w-4 h-4" />
+                      </div>
+                      <input
+                        type="tel"
+                        name="phone"
+                        value={formData.phone}
+                        onChange={handleChange}
+                        placeholder="0912 345 678"
+                        required
+                        className="block w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-xs sm:text-sm font-mono placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
                       Mã số cán bộ / Số thẻ công chức <span className="text-rose-500">*</span>
@@ -441,25 +460,25 @@ export default function RegisterPage() {
                       />
                     </div>
                   </div>
+                </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Đơn vị công tác trực thuộc <span className="text-rose-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <select
-                        name="dept_code"
-                        value={formData.dept_code}
-                        onChange={handleChange}
-                        className="block w-full py-2 px-2.5 border border-slate-300 rounded-lg text-xs sm:text-sm bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-                      >
-                        {departments.map((d) => (
-                          <option key={d.code} value={d.code}>
-                            {d.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Đơn vị công tác trực thuộc <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <select
+                      name="dept_code"
+                      value={formData.dept_code}
+                      onChange={handleChange}
+                      className="block w-full py-2 px-2.5 border border-slate-300 rounded-lg text-xs sm:text-sm bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                    >
+                      {departments.map((d) => (
+                        <option key={d.code} value={d.code}>
+                          {d.name} ({d.short_name})
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
               </>
@@ -562,7 +581,7 @@ export default function RegisterPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-[#1E3A8A] hover:bg-blue-900 text-white font-bold py-2.5 px-4 rounded-lg shadow-sm transition-colors text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70"
+                className="w-full bg-[#0B57D0] hover:bg-[#0842A0] text-white font-bold py-2.5 px-4 rounded-full shadow-sm transition-colors text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70"
               >
                 {loading ? (
                   <>

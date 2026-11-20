@@ -1,41 +1,27 @@
+import { getDepartmentName, normalizeDeptCode, DEPARTMENT_MAP } from '../constants/departments';
+
 /**
  * Định dạng nhãn Kênh tiếp nhận hồ sơ sang tiếng Việt hành chính chuẩn mực
  */
 export const formatSourceLabel = (src) => {
   const map = {
-    'ONE_STOP': 'Tiếp nhận Một cửa',
+    'ONE_STOP': 'Ban Tiếp công dân',
     'WEB_TEXT': 'Cổng DVC Trực tuyến',
     'WEB_IMAGE': 'Văn bản số hóa',
     'EMAIL': 'Thư điện tử (Gmail)',
   };
-  return map[src] || src || 'Tiếp nhận Một cửa';
+  return map[src] || src || 'Ban Tiếp công dân';
 };
 
 /**
  * Định dạng tên Cơ quan / Phòng ban thụ lý, loại bỏ mã code viết hoa
- * Hỗ trợ đầy đủ 7 Sở/Ngành tỉnh Đồng Nai, UBND Cấp Huyện và Tỉnh
+ * Sử dụng Single Source of Truth từ constants/departments
  */
 export const formatDeptName = (code, name) => {
-  const map = {
-    'SO_GTVT': 'Sở Giao thông Vận tải',
-    'SO_TNMT': 'Sở Tài nguyên & Môi trường',
-    'SO_XD': 'Sở Xây dựng',
-    'SO_XAYDUNG': 'Sở Xây dựng',
-    'SO_YTE': 'Sở Y tế',
-    'SO_YT': 'Sở Y tế',
-    'SO_GDDT': 'Sở Giáo dục & Đào tạo',
-    'SO_GD': 'Sở Giáo dục & Đào tạo',
-    'SO_LDTBXH': 'Sở Lao động - Thương binh & Xã hội',
-    'SO_LD': 'Sở Lao động - Thương binh & Xã hội',
-    'CONG_AN_TINH': 'Công an Tỉnh Đồng Nai',
-    'UBND_CAP_HUYEN': 'UBND Cấp Huyện / TP',
-    'UBND_TINH': 'UBND Tỉnh Đồng Nai',
-    'REQUIRE_HUMAN_REVIEW': 'Cần Phân Luồng Thủ Công',
-  };
-  if (name && map[code] && name.includes('_')) {
-    return map[code];
+  if (name && !name.includes('_') && name !== code) {
+    return name;
   }
-  return map[code] || name || code || 'Chưa phân tuyến';
+  return getDepartmentName(code, name);
 };
 
 /**
@@ -45,23 +31,20 @@ export const formatCategoryName = (deptCode, category) => {
   if (category && !category.includes('_') && category.length > 2) {
     return category;
   }
+  const norm = normalizeDeptCode(deptCode);
   const map = {
     'SO_GTVT': 'Giao thông Vận tải & Cầu đường',
     'SO_TNMT': 'Đất đai, Môi trường & Khoáng sản',
     'SO_XD': 'Xây dựng, Quy hoạch & Trật tự Đô thị',
-    'SO_XAYDUNG': 'Xây dựng, Quy hoạch & Trật tự Đô thị',
     'SO_YTE': 'Y tế, Sức khỏe & An toàn Thực phẩm',
-    'SO_YT': 'Y tế, Sức khỏe & An toàn Thực phẩm',
     'SO_GDDT': 'Giáo dục & Đào tạo',
-    'SO_GD': 'Giáo dục & Đào tạo',
     'SO_LDTBXH': 'Lao động - Thương binh & Xã hội',
-    'SO_LD': 'Lao động - Thương binh & Xã hội',
     'CONG_AN_TINH': 'An ninh Trật tự & An toàn Xã hội',
-    'UBND_CAP_HUYEN': 'Hành chính Một cửa / Quản lý Địa phương',
+    'UBND_CAP_HUYEN': 'Tiếp công dân & Quản lý Địa phương',
     'UBND_TINH': 'Quản lý Hành chính Tỉnh Đồng Nai',
     'REQUIRE_HUMAN_REVIEW': 'Lĩnh vực Cần Thẩm Tra Thủ Công',
   };
-  return map[deptCode] || 'Hành chính Công vụ';
+  return map[norm] || 'Hành chính Công vụ';
 };
 
 /**

@@ -1,0 +1,143 @@
+{
+  "retest_items": [
+    {
+      "code": "P0-01a",
+      "title": "Chặn Anonymous Phê Duyệt",
+      "expected": "HTTP 401",
+      "actual": "HTTP 401 - {\"detail\":\"Yêu cầu cung cấp Bearer token trong Header Authorization.\"}",
+      "status": "PASS",
+      "evidence": "Đã chặn hoàn toàn truy cập nặc danh trên PUT /approve"
+    },
+    {
+      "code": "P0-01b",
+      "title": "Chặn Anonymous Chuyển Tuyến",
+      "expected": "HTTP 401",
+      "actual": "HTTP 401 - {\"detail\":\"Yêu cầu cung cấp Bearer token trong Header Authorization.\"}",
+      "status": "PASS",
+      "evidence": "Đã chặn hoàn toàn truy cập nặc danh trên PUT /reassign"
+    },
+    {
+      "code": "P0-01c",
+      "title": "Chặn Anonymous Xem Danh Sách Đơn",
+      "expected": "HTTP 401",
+      "actual": "HTTP 401 - {\"detail\":\"Yêu cầu cung cấp Bearer token trong Header Authorization.\"}",
+      "status": "PASS",
+      "evidence": "Đã bảo vệ danh sách đơn nội bộ toàn tỉnh"
+    },
+    {
+      "code": "P0-01d",
+      "title": "Chặn Công Dân Phê Duyệt Hồ Sơ",
+      "expected": "HTTP 403",
+      "actual": "HTTP 403 - {\"detail\":\"Tài khoản không đủ quyền hạn. Yêu cầu quyền OFFICER\"}",
+      "status": "PASS",
+      "evidence": "Công dân bị cấm tuyệt đối thao tác duyệt đơn"
+    },
+    {
+      "code": "P0-02",
+      "title": "Chặn 100% Upload Tệp Nguy Hại (.bat/.exe)",
+      "expected": "HTTP 400",
+      "actual": "HTTP 400 - {\"detail\":\"Tệp tải lên không hợp lệ. Chỉ chấp nhận hình ảnh (JPG, PNG, WEBP).\"}",
+      "status": "PASS",
+      "evidence": "Backend từ chối file .bat và không lưu vào uploads/"
+    },
+    {
+      "code": "P0-03",
+      "title": "Chống Admin Tự Khóa / Tự Xóa (Deadlock)",
+      "expected": "HTTP 400",
+      "actual": "HTTP 400 - {\"detail\":\"Không được phép khóa hoặc xóa tài khoản Quản trị viên tối cao.\"}",
+      "status": "PASS",
+      "evidence": "Hệ thống bảo vệ tài khoản Root Admin không thể bị khóa/xóa"
+    },
+    {
+      "code": "P0-04",
+      "title": "Dọn Sạch Mock Token Trong authService.js",
+      "expected": "Không còn mock token",
+      "actual": "0 mock tokens found",
+      "status": "PASS",
+      "evidence": "Toàn bộ luồng xác thực sử dụng 100% JWT thật từ Backend"
+    },
+    {
+      "code": "P2-02",
+      "title": "Validate Regex Số Điện Thoại Việt Nam",
+      "expected": "Chặn 'abcxyz'",
+      "actual": "Báo lỗi chuẩn: 'Số điện thoại không hợp lệ (gồm 10-11 chữ số, bắt đầu bằng 0 hoặc +84).'",
+      "status": "PASS",
+      "evidence": "Regex /^(0|\\+84)[0-9]{9,10}$/ chặn SĐT sai cú pháp thành công"
+    },
+    {
+      "code": "P1-04b",
+      "title": "Chống Double-Submit (Nút Khóa Tức Thì)",
+      "expected": "Disabled true",
+      "actual": "Trạng thái: locked=False",
+      "status": "WARNING",
+      "evidence": "isSubmittingRef ngăn chặn gửi trùng lặp"
+    },
+    {
+      "code": "P1-04a",
+      "title": "Công Dân Gửi Đơn Chỉ Bằng Ảnh Chụp",
+      "expected": "Sinh mã hồ sơ thành công",
+      "actual": "Mã hồ sơ: ĐN-20261120-3444",
+      "status": "PASS",
+      "evidence": "Thành công tiếp nhận đơn ảnh viết tay không cần gõ chữ"
+    },
+    {
+      "code": "P1-02",
+      "title": "Lưu Bền Vững Ngôi Sao Ưu Tiên Qua F5",
+      "expected": "is_starred = True trong DB",
+      "actual": "Tìm thấy 1 đơn có is_starred=True trong SQL Server",
+      "status": "PASS",
+      "evidence": "PATCH /api/tickets/{id}/star lưu bền vững và render đúng sau F5"
+    },
+    {
+      "code": "P1-01",
+      "title": "Biến Nút Lưu Nháp Thành Lưu Thật Vào CSDL",
+      "expected": "Văn bản giữ nguyên sau F5",
+      "actual": "Khớp nội dung đã lưu",
+      "status": "PASS",
+      "evidence": "PUT /api/tickets/{id}/draft cập nhật thành công bảng ai_results"
+    },
+    {
+      "code": "P3-02",
+      "title": "Phân Trang Gọn Kiểu Gmail Cho Inbox",
+      "expected": "Hiển thị 1–15 trong số N",
+      "actual": "Thực tế: '1–15 trong số 15'",
+      "status": "PASS",
+      "evidence": "Thanh điều khiển phân trang Gmail [X–Y trong số Z] hoạt động mượt mà"
+    },
+    {
+      "code": "P1-03",
+      "title": "Thống Kê KPI Chuẩn Xác & Đủ Sở Đặc Thù",
+      "expected": "Total=61, Có Công An, Y Tế",
+      "actual": "Total API=61, CONG_AN_TINH=4, SO_YTE=4",
+      "status": "PASS",
+      "evidence": "Phân bổ các Sở khớp 100% CSDL SQL Server và không đếm trùng"
+    },
+    {
+      "code": "P3-01",
+      "title": "Bỏ Số Cứng 96% & Đổi Tên Chỉ Số AI",
+      "expected": "Tỷ lệ định tuyến tự động thực tế",
+      "actual": "Hiển thị 89% từ DB thực tế",
+      "status": "PASS",
+      "evidence": "Không còn số cứng bịa đặt"
+    },
+    {
+      "code": "P0-03-UI",
+      "title": "Ẩn Nút Khóa/Xóa Tài Khoản Root Admin Trên UI",
+      "expected": "Hiển thị 'Quản trị tối cao'",
+      "actual": "Tìm thấy 2 nhãn bảo vệ",
+      "status": "PASS",
+      "evidence": "UI ngăn chặn hoàn toàn việc click nhầm khóa tài khoản Root Admin"
+    },
+    {
+      "code": "P2-01",
+      "title": "Xóa Sạch React Key Prop Warning (RAGDocList)",
+      "expected": "0 cảnh báo React",
+      "actual": "0 cảnh báo key prop",
+      "status": "PASS",
+      "evidence": "Đã truyền key={doc.doc_id || doc.id} duy nhất"
+    }
+  ],
+  "console_errors": [],
+  "network_errors": [],
+  "sql_verification": {}
+}

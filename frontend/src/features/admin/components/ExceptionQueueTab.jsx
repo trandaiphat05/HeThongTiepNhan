@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../../services/api';
 import { formatSourceLabel } from '../../../utils/formatters';
+import { ALL_DEPARTMENTS, getDepartmentName } from '../../../constants/departments';
 
 /**
  * Component Giám sát Hệ thống & Hàng đợi Hồ sơ Ngoại lệ (REQUIRE_HUMAN_REVIEW)
@@ -105,12 +106,44 @@ export default function ExceptionQueueTab({ onToast }) {
     }
   };
 
-  const gtvtCount = stats?.departments?.SO_GTVT?.count || 0;
-  const tnmtCount = stats?.departments?.SO_TNMT?.count || 0;
-  const xdCount = stats?.departments?.SO_XD?.count || 0;
-  const huyenCount = stats?.departments?.UBND_CAP_HUYEN?.count || 0;
   const totalCount = stats?.total_tickets || 0;
-  const aiConfidence = stats?.ai_avg_confidence_percent || 96;
+  const aiConfidence = stats?.ai_avg_confidence_percent;
+  const displayAiConfidence = (aiConfidence !== undefined && aiConfidence !== null) ? `${aiConfidence}%` : '—';
+
+  const deptIconMap = {
+    SO_GTVT: Car,
+    SO_TNMT: Trees,
+    SO_XD: Hammer,
+    SO_XAYDUNG: Hammer,
+    UBND_CAP_HUYEN: Landmark,
+    UBND_TINH: Landmark,
+    CONG_AN_TINH: ShieldAlert,
+    SO_YTE: Building2,
+    SO_GDDT: Building2,
+    SO_LDTBXH: Building2,
+  };
+
+  const deptSubtitleMap = {
+    SO_GTVT: 'Hạ tầng & đường bộ',
+    SO_TNMT: 'Đất đai, môi trường',
+    SO_XD: 'Quy hoạch & trật tự XD',
+    SO_XAYDUNG: 'Quy hoạch & trật tự XD',
+    CONG_AN_TINH: 'An ninh, trật tự ATXH',
+    SO_YTE: 'Y tế, phòng dịch & ATTP',
+    SO_GDDT: 'Giáo dục & đào tạo',
+    SO_LDTBXH: 'Lao động & an sinh',
+    UBND_CAP_HUYEN: 'UBND TP/Huyện thụ lý',
+    UBND_TINH: 'UBND Tỉnh trực tiếp',
+  };
+
+  const deptEntries = stats?.departments
+    ? (Array.isArray(stats.departments)
+        ? stats.departments
+        : Object.values(stats.departments)
+      ).filter((d) => d.code !== 'REQUIRE_HUMAN_REVIEW' && d.code !== 'SO_XAYDUNG')
+    : ALL_DEPARTMENTS
+        .filter((d) => d.code !== 'REQUIRE_HUMAN_REVIEW')
+        .map((d) => ({ code: d.code, name: d.short_name || d.name, count: 0 }));
 
   return (
     <div className="space-y-6">
@@ -139,8 +172,8 @@ export default function ExceptionQueueTab({ onToast }) {
           </button>
         </div>
 
-        {/* Lưới 6 Thẻ Chỉ Số KPI Chuẩn Hóa Hành Chính (Nền Trắng, Nhấn Xanh Dương #1E3A8A) */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        {/* Lưới Thẻ Chỉ Số KPI Chuẩn Hóa Hành Chính (Dynamic Department Cards + Tỷ lệ định tuyến tự động) */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-3">
           {/* Card 1: Tổng Tiếp Nhận */}
           <div className="p-3.5 rounded-xl border border-slate-200 border-l-4 border-l-gov-blue bg-white flex flex-col justify-between shadow-2xs hover:shadow-xs transition-shadow">
             <div className="flex items-center justify-between text-slate-700 text-xs">
@@ -151,85 +184,54 @@ export default function ExceptionQueueTab({ onToast }) {
               <span className="text-2xl font-black text-slate-900 font-mono">
                 {statsLoading ? '...' : totalCount}
               </span>
-              <span className="text-[11px] text-slate-500 block">Tổng hồ sơ đã tiếp nhận</span>
+              <span className="text-[11px] text-slate-500 block truncate">Tổng tiếp nhận</span>
             </div>
           </div>
 
-          {/* Card 2: Sở GTVT */}
-          <div className="p-3.5 rounded-xl border border-slate-200 border-l-4 border-l-gov-blue bg-white flex flex-col justify-between shadow-2xs hover:shadow-xs transition-shadow">
-            <div className="flex items-center justify-between text-slate-700 text-xs">
-              <span className="font-bold">Sở GTVT</span>
-              <Car className="w-4 h-4 text-gov-blue" />
-            </div>
-            <div className="mt-2">
-              <span className="text-2xl font-black text-slate-900 font-mono">
-                {statsLoading ? '...' : gtvtCount}
-              </span>
-              <span className="text-[11px] text-slate-500 block">Hạ tầng & đường bộ</span>
-            </div>
-          </div>
+          {/* Dynamic Department Cards */}
+          {deptEntries.map((dept) => {
+            const IconComp = deptIconMap[dept.code] || Building2;
+            const subtitle = deptSubtitleMap[dept.code] || 'Hồ sơ thụ lý';
+            return (
+              <div 
+                key={dept.code} 
+                className="p-3.5 rounded-xl border border-slate-200 border-l-4 border-l-gov-blue bg-white flex flex-col justify-between shadow-2xs hover:shadow-xs transition-shadow"
+              >
+                <div className="flex items-center justify-between text-slate-700 text-xs">
+                  <span className="font-bold truncate" title={dept.name}>{dept.name || dept.code}</span>
+                  <IconComp className="w-4 h-4 text-gov-blue shrink-0 ml-1" />
+                </div>
+                <div className="mt-2">
+                  <span className="text-2xl font-black text-slate-900 font-mono">
+                    {statsLoading ? '...' : (dept.count ?? 0)}
+                  </span>
+                  <span className="text-[11px] text-slate-500 block truncate" title={subtitle}>{subtitle}</span>
+                </div>
+              </div>
+            );
+          })}
 
-          {/* Card 3: Sở TN&MT */}
+          {/* Card: Tỷ lệ định tuyến tự động */}
           <div className="p-3.5 rounded-xl border border-slate-200 border-l-4 border-l-gov-blue bg-white flex flex-col justify-between shadow-2xs hover:shadow-xs transition-shadow">
             <div className="flex items-center justify-between text-slate-700 text-xs">
-              <span className="font-bold">Sở TN&MT</span>
-              <Trees className="w-4 h-4 text-gov-blue" />
-            </div>
-            <div className="mt-2">
-              <span className="text-2xl font-black text-slate-900 font-mono">
-                {statsLoading ? '...' : tnmtCount}
-              </span>
-              <span className="text-[11px] text-slate-500 block">Đất đai, môi trường</span>
-            </div>
-          </div>
-
-          {/* Card 4: Sở Xây Dựng */}
-          <div className="p-3.5 rounded-xl border border-slate-200 border-l-4 border-l-gov-blue bg-white flex flex-col justify-between shadow-2xs hover:shadow-xs transition-shadow">
-            <div className="flex items-center justify-between text-slate-700 text-xs">
-              <span className="font-bold">Sở Xây Dựng</span>
-              <Hammer className="w-4 h-4 text-gov-blue" />
-            </div>
-            <div className="mt-2">
-              <span className="text-2xl font-black text-slate-900 font-mono">
-                {statsLoading ? '...' : xdCount}
-              </span>
-              <span className="text-[11px] text-slate-500 block">Quy hoạch & trật tự XD</span>
-            </div>
-          </div>
-
-          {/* Card 5: UBND Cấp Huyện / TP */}
-          <div className="p-3.5 rounded-xl border border-slate-200 border-l-4 border-l-gov-blue bg-white flex flex-col justify-between shadow-2xs hover:shadow-xs transition-shadow">
-            <div className="flex items-center justify-between text-slate-700 text-xs">
-              <span className="font-bold">UBND Cấp Huyện</span>
-              <Landmark className="w-4 h-4 text-gov-blue" />
-            </div>
-            <div className="mt-2">
-              <span className="text-2xl font-black text-slate-900 font-mono">
-                {statsLoading ? '...' : huyenCount}
-              </span>
-              <span className="text-[11px] text-slate-500 block">UBND TP/Huyện thụ lý</span>
-            </div>
-          </div>
-
-          {/* Card 6: Tỷ lệ Tự Động Phân Luồng */}
-          <div className="p-3.5 rounded-xl border border-slate-200 border-l-4 border-l-gov-blue bg-white flex flex-col justify-between shadow-2xs hover:shadow-xs transition-shadow">
-            <div className="flex items-center justify-between text-slate-700 text-xs">
-              <span className="font-bold">Tự Động Phân Tuyến</span>
-              <TrendingUp className="w-4 h-4 text-gov-blue" />
+              <span className="font-bold truncate" title="Tỷ lệ định tuyến tự động">Tỷ lệ định tuyến tự động</span>
+              <TrendingUp className="w-4 h-4 text-gov-blue shrink-0 ml-1" />
             </div>
             <div className="mt-2">
               <div className="flex items-baseline justify-between">
                 <span className="text-2xl font-black text-slate-900 font-mono">
-                  {statsLoading ? '...' : `${aiConfidence}%`}
+                  {statsLoading ? '...' : displayAiConfidence}
                 </span>
-                <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                  Chính xác
-                </span>
+                {aiConfidence !== undefined && aiConfidence !== null && (
+                  <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                    Chính xác
+                  </span>
+                )}
               </div>
               <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mt-1.5">
                 <div 
                   className="bg-gov-blue h-full rounded-full transition-all duration-500" 
-                  style={{ width: `${Math.min(aiConfidence, 100)}%` }}
+                  style={{ width: `${Math.min(typeof aiConfidence === 'number' ? aiConfidence : 0, 100)}%` }}
                 ></div>
               </div>
             </div>
@@ -340,15 +342,11 @@ export default function ExceptionQueueTab({ onToast }) {
                         })}
                         className="gov-input py-1.5 text-xs font-semibold text-slate-800 sm:max-w-xs"
                       >
-                        <option value="SO_GTVT">Sở Giao thông Vận tải</option>
-                        <option value="SO_TNMT">Sở Tài nguyên & Môi trường</option>
-                        <option value="SO_XD">Sở Xây dựng</option>
-                        <option value="SO_YTE">Sở Y tế</option>
-                        <option value="SO_GDDT">Sở Giáo dục & Đào tạo</option>
-                        <option value="SO_LDTBXH">Sở Lao động - Thương binh & Xã hội</option>
-                        <option value="CONG_AN_TINH">Công an Tỉnh Đồng Nai</option>
-                        <option value="UBND_CAP_HUYEN">UBND Cấp Huyện / TP</option>
-                        <option value="UBND_TINH">UBND Tỉnh Đồng Nai</option>
+                        {ALL_DEPARTMENTS.filter(d => d.code !== 'REQUIRE_HUMAN_REVIEW').map((d) => (
+                          <option key={d.code} value={d.code}>
+                            {d.name}
+                          </option>
+                        ))}
                       </select>
 
                       <input

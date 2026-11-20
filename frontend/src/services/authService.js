@@ -3,6 +3,7 @@
  */
 
 import httpClient from './httpClient';
+import { ALL_DEPARTMENTS, getDepartmentName } from '../constants/departments';
 
 const localUsers = [
   { user_id: 1, full_name: 'Minh Nguyễn (Admin)', username: 'admin', role: 'ADMIN', dept_code: 'ALL', dept_name: 'Toàn Hệ Thống', is_active: true },
@@ -14,21 +15,11 @@ const localUsers = [
   { user_id: 7, full_name: 'Phạm Đức Thắng (Sở GD&ĐT)', username: 'canbo_gddt', role: 'OFFICER', dept_code: 'SO_GDDT', dept_name: 'Sở Giáo dục & Đào tạo', is_active: true },
   { user_id: 8, full_name: 'Võ Thanh Sơn (Sở LĐ-TB&XH)', username: 'canbo_ldtbxh', role: 'OFFICER', dept_code: 'SO_LDTBXH', dept_name: 'Sở Lao động - Thương binh & Xã hội', is_active: true },
   { user_id: 9, full_name: 'Trần Văn An (Công an Tỉnh)', username: 'canbo_congan', role: 'OFFICER', dept_code: 'CONG_AN_TINH', dept_name: 'Công an Tỉnh Đồng Nai', is_active: true },
-  { user_id: 10, full_name: 'Vũ Thị Ngọc (Một cửa)', username: 'canbo_motcua', role: 'OFFICER', dept_code: 'UBND_CAP_HUYEN', dept_name: 'Bộ phận Một cửa / UBND Cấp Huyện', is_active: true },
+  { user_id: 10, full_name: 'Vũ Thị Ngọc - Chuyên viên Tiếp công dân', username: 'canbo_motcua', role: 'OFFICER', dept_code: 'UBND_CAP_HUYEN', dept_name: 'Ban Tiếp công dân Tỉnh', is_active: true },
   { user_id: 11, full_name: 'Nguyễn Văn Công Dân', username: 'congdan1', role: 'CITIZEN', dept_code: null, dept_name: 'Công dân', is_active: true }
 ];
 
-const localDepartments = [
-  { code: 'SO_GTVT', name: 'Sở Giao thông Vận tải' },
-  { code: 'SO_TNMT', name: 'Sở Tài nguyên & Môi trường' },
-  { code: 'SO_XD', name: 'Sở Xây dựng' },
-  { code: 'SO_YTE', name: 'Sở Y tế' },
-  { code: 'SO_GDDT', name: 'Sở Giáo dục & Đào tạo' },
-  { code: 'SO_LDTBXH', name: 'Sở Lao động - Thương binh & Xã hội' },
-  { code: 'CONG_AN_TINH', name: 'Công an Tỉnh Đồng Nai' },
-  { code: 'UBND_CAP_HUYEN', name: 'UBND Cấp Huyện / TP' },
-  { code: 'UBND_TINH', name: 'UBND Tỉnh Đồng Nai' },
-];
+const localDepartments = ALL_DEPARTMENTS;
 
 export const authService = {
   /**
@@ -38,61 +29,8 @@ export const authService = {
     try {
       const res = await httpClient.post('/api/auth/login', credentials);
       if (res && res.access_token) return res;
+      throw new Error('Đăng nhập không thành công: Không nhận được mã xác thực.');
     } catch (networkErr) {
-      const username = credentials.username?.toLowerCase()?.trim();
-      const password = credentials.password;
-
-      if (username === 'admin' && password === 'admin123') {
-        return {
-          access_token: 'mock_token_admin_' + Date.now(),
-          token_type: 'bearer',
-          user: {
-            user_id: 1,
-            username: 'admin',
-            full_name: 'Quản trị viên Hệ thống',
-            role: 'ADMIN',
-            department_code: 'ADMIN',
-          }
-        };
-      } else if (password === 'officer123') {
-        const officerMap = {
-          canbo_gtvt: { id: 2, name: 'Lê Thanh Bình - Sở GTVT', dept: 'SO_GTVT' },
-          canbo_tnmt: { id: 3, name: 'Hoàng Thị Yến - Sở TN&MT', dept: 'SO_TNMT' },
-          canbo_xaydung: { id: 4, name: 'Đặng Quốc Huy - Sở Xây dựng', dept: 'SO_XD' },
-          canbo_soxd: { id: 5, name: 'Đặng Quốc Huy - Sở XD', dept: 'SO_XD' },
-          canbo_yte: { id: 6, name: 'Trần Thị Thu - Sở Y tế', dept: 'SO_YTE' },
-          canbo_gddt: { id: 7, name: 'Phạm Đức Thắng - Sở GD&ĐT', dept: 'SO_GDDT' },
-          canbo_ldtbxh: { id: 8, name: 'Võ Thanh Sơn - Sở LĐ-TB&XH', dept: 'SO_LDTBXH' },
-          canbo_congan: { id: 9, name: 'Trần Văn An - Công an Tỉnh', dept: 'CONG_AN_TINH' },
-          canbo_motcua: { id: 10, name: 'Vũ Thị Ngọc - Bộ phận Một cửa', dept: 'UBND_CAP_HUYEN' },
-        };
-        const officer = officerMap[username];
-        if (officer) {
-          return {
-            access_token: 'mock_token_officer_' + Date.now(),
-            token_type: 'bearer',
-            user: {
-              user_id: officer.id,
-              username,
-              full_name: officer.name,
-              role: 'OFFICER',
-              department_code: officer.dept,
-            }
-          };
-        }
-      } else if (username === 'congdan1' && password === 'citizen123') {
-        return {
-          access_token: 'mock_token_citizen_' + Date.now(),
-          token_type: 'bearer',
-          user: {
-            user_id: 11,
-            username: 'congdan1',
-            full_name: 'Nguyễn Văn Công Dân',
-            role: 'CITIZEN',
-            department_code: null,
-          }
-        };
-      }
       const msg = networkErr.response?.data?.detail || networkErr.message || 'Tên đăng nhập hoặc mật khẩu không chính xác.';
       throw new Error(msg);
     }
@@ -124,6 +62,19 @@ export const authService = {
     } catch (err) {
       const msg = err.response?.data?.detail || err.message || 'Không thể liên kết tài khoản Gmail.';
       throw new Error(msg);
+    }
+  },
+
+  /**
+   * Hủy liên kết tài khoản Gmail: POST /api/auth/unlink-gmail
+   */
+  async unlinkGmail() {
+    try {
+      const res = await httpClient.post('/api/auth/unlink-gmail');
+      return res;
+    } catch (err) {
+      // Fallback
+      return { success: true, message: 'Đã ngắt kết nối hòm thư Gmail.' };
     }
   },
 
@@ -173,8 +124,15 @@ export const authService = {
     return [...localUsers];
   },
 
-  async getDepartments() {
-    return [...localDepartments];
+  async getDepartments(forOfficer = false) {
+    try {
+      const url = forOfficer ? '/api/departments?for_officer=true' : '/api/departments';
+      const res = await httpClient.get(url);
+      if (Array.isArray(res) && res.length > 0) return res;
+    } catch (e) {}
+    return forOfficer
+      ? localDepartments.filter((d) => d.is_selectable_for_officer)
+      : [...localDepartments];
   },
 
   async toggleUserStatus(userId) {

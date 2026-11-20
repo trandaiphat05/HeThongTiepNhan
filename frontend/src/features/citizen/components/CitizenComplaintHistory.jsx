@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { 
-  FileText, Search, Clock, CheckCircle2, Building2, 
-  Mail, Calendar, ArrowRight, RefreshCw, AlertCircle, ExternalLink, User
+  FileText, Search, Building2, Calendar, ArrowRight, RefreshCw, User
 } from 'lucide-react';
 import { api } from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
@@ -19,34 +18,34 @@ export default function CitizenComplaintHistory({ onSelectTicket, onGoToSubmit }
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [guestEmail, setGuestEmail] = useState('');
-  const [searchedEmail, setSearchedEmail] = useState(null);
-
-  const fetchTickets = async (emailToQuery = null) => {
-    setLoading(true);
-    try {
-      const email = emailToQuery || (isAuthenticated ? (user?.email || user?.gmail_account) : null);
-      const data = await api.getMyTickets(email);
-      setTickets(data || []);
-      setSearchedEmail(email);
-    } catch (err) {
-      console.error('Lỗi tải lịch sử đơn thư:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [loadError, setLoadError] = useState('');
+  const [refreshCount, setRefreshCount] = useState(0);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      fetchTickets();
+    setTickets([]);
+    setLoadError('');
+    if (!isAuthenticated) {
+      setLoading(false);
+      return;
     }
-  }, [isAuthenticated, user?.email]);
 
-  const handleGuestSearch = (e) => {
-    e.preventDefault();
-    if (!guestEmail.trim()) return;
-    fetchTickets(guestEmail.trim());
-  };
+    const controller = new AbortController();
+    setLoading(true);
+    api.getMyTickets(controller.signal)
+      .then((data) => {
+        if (!controller.signal.aborted) setTickets(data);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setLoadError('Không tải được lịch sử đơn thư. Vui lòng thử lại.');
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [isAuthenticated, user?.user_id, user?.email, user?.gmail_account, refreshCount]);
 
   // Lọc theo từ khóa tìm kiếm
   const filteredTickets = tickets.filter(t => {
@@ -90,8 +89,8 @@ export default function CitizenComplaintHistory({ onSelectTicket, onGoToSubmit }
           <div className="flex items-center gap-2">
             <button
               type="button"
-              disabled={loading}
-              onClick={() => fetchTickets(searchedEmail)}
+              disabled={loading || !isAuthenticated}
+              onClick={() => setRefreshCount((count) => count + 1)}
               className="gov-btn-secondary text-xs py-2 px-3 flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
               title="Làm mới danh sách"
             >
@@ -116,29 +115,11 @@ export default function CitizenComplaintHistory({ onSelectTicket, onGoToSubmit }
             />
           </div>
 
-          {!isAuthenticated && (
-            <form onSubmit={handleGuestSearch} className="flex items-center gap-2">
-              <input
-                type="email"
-                value={guestEmail}
-                onChange={(e) => setGuestEmail(e.target.value)}
-                placeholder="Nhập email của bạn để tra cứu..."
-                className="gov-input text-xs sm:text-sm py-2 w-56 sm:w-64"
-              />
-              <button
-                type="submit"
-                disabled={loading}
-                className="gov-btn-primary text-xs py-2 px-3 font-semibold shrink-0 cursor-pointer"
-              >
-                Tra Cứu
-              </button>
-            </form>
-          )}
         </div>
       </div>
 
       {/* 2. Banner nhắc nhở nếu chưa đăng nhập */}
-      {!isAuthenticated && !searchedEmail && (
+      {!isAuthenticated && (
         <div className="p-4 bg-blue-50/80 border border-blue-200 rounded-xl flex items-start gap-3 text-xs text-slate-700">
           <User className="w-5 h-5 text-gov-blue shrink-0 mt-0.5" />
           <div className="space-y-1">
@@ -153,7 +134,9 @@ export default function CitizenComplaintHistory({ onSelectTicket, onGoToSubmit }
       )}
 
       {/* 3. Danh Sách Hồ Sơ Đã Gửi */}
-      {loading ? (
+      {!isAuthenticated ? null : loadError ? (
+        <p role="alert" className="text-sm text-red-700">{loadError}</p>
+      ) : loading ? (
         <div className="gov-card p-10 text-center space-y-3">
           <div className="w-8 h-8 border-3 border-gov-blue border-t-transparent rounded-full animate-spin mx-auto" />
           <p className="text-xs text-slate-500 font-medium">Đang đồng bộ dữ liệu đơn thư của bạn...</p>
@@ -167,7 +150,7 @@ export default function CitizenComplaintHistory({ onSelectTicket, onGoToSubmit }
           <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
             {searchQuery 
               ? `Không tìm thấy đơn nào phù hợp với từ khóa "${searchQuery}".`
-              : 'Ông/Bà chưa nộp đơn thư phản ánh nào từ tài khoản này hoặc địa chỉ email đã cung cấp.'}
+              : 'Ông/Bà chưa nộp đơn thư phản ánh nào từ tài khoản này hoặc hộp thư đã liên kết.'}
           </p>
           {onGoToSubmit && (
             <div className="pt-2">
@@ -253,7 +236,7 @@ export default function CitizenComplaintHistory({ onSelectTicket, onGoToSubmit }
                     onClick={() => onSelectTicket(ticket.tracking_code)}
                     className="gov-btn-primary text-xs py-1.5 px-3.5 font-semibold flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs self-end sm:self-auto"
                   >
-                    <span>Xem Tiến Độ (Timeline 4 Bước)</span>
+                    <span>Xem Tiến Độ Xử Lý</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>

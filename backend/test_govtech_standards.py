@@ -64,12 +64,17 @@ def run_govtech_tests():
     # 3. Cán bộ chuyển cơ quan thụ lý (Human Override / Reassign)
     ticket_id = lookup_data.get("ticket_id")
     print(f"\n[3] Kiểm thử Human Override (Chuyển cơ quan thụ lý cho Ticket #{ticket_id}):")
+    login_officer = client.post("/api/auth/login", json={"username": "canbo_gtvt", "password": "officer123"})
+    officer_token = login_officer.json()["access_token"]
+    headers_officer = {"Authorization": f"Bearer {officer_token}"}
+
     reassign_res = client.put(
         f"/api/tickets/{ticket_id}/reassign",
+        headers=headers_officer,
         json={
             "department_code": "SO_XD",
             "reason": "Hệ thống cống thoát nước thuộc phân cấp quản lý hạ tầng kỹ thuật Sở Xây dựng",
-            "reassigned_by": "Cán bộ thẩm tra Một cửa"
+            "reassigned_by": "Chuyên viên Tiếp công dân"
         }
     )
     assert reassign_res.status_code == 200, f"Reassign lỗi: {reassign_res.text}"
@@ -82,7 +87,10 @@ def run_govtech_tests():
 
     # 4. Thống kê giám sát hệ thống dành cho Quản trị viên
     print("\n[4] Kiểm thử API Thống kê Giám sát Hệ thống (/api/admin/stats):")
-    stats_res = client.get("/api/admin/stats")
+    login_admin = client.post("/api/auth/login", json={"username": "admin", "password": "admin123"})
+    admin_token = login_admin.json()["access_token"]
+    headers_admin = {"Authorization": f"Bearer {admin_token}"}
+    stats_res = client.get("/api/admin/stats", headers=headers_admin)
     assert stats_res.status_code == 200, f"Stats lỗi: {stats_res.text}"
     stats_data = stats_res.json()
     print(f"  ✓ Tổng số hồ sơ toàn tỉnh: {stats_data.get('total_tickets')}")

@@ -1,36 +1,63 @@
-import React, { useState, useRef } from 'react';
-import { Landmark, Send, Search, History } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import PropTypes from 'prop-types';
+import { useSearchParams, useLocation } from 'react-router-dom';
+import { Landmark } from 'lucide-react';
 import ComplaintSubmitForm from './components/ComplaintSubmitForm';
 import SubmissionReceipt from './components/SubmissionReceipt';
-import SubmissionModal from './components/SubmissionModal';
 import ComplaintTrackingSection from './components/ComplaintTrackingSection';
 import CitizenComplaintHistory from './components/CitizenComplaintHistory';
 
 /**
  * Cổng Tiếp Nhận & Tra Cứu Đơn Thư Trực Tuyến - Dành Cho Người Dân
- * Tích hợp:
- * 1. Form gửi phản ánh trực tuyến
- * 2. Khung tra cứu tiến độ theo mã hồ sơ (Timeline 4 bước)
- * 3. Lịch sử đơn thư đã gửi gắn với tài khoản công dân
+ * Điều hướng 100% đồng bộ qua Sidebar URL Query (?tab=submit | ?tab=lookup | ?tab=history)
  */
-export default function CitizenPortal() {
-  const [activeTab, setActiveTab] = useState('SUBMIT'); // 'SUBMIT' | 'TRACK' | 'HISTORY'
+export default function CitizenPortal({ initialTab }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+
+  const rawTab = (searchParams.get('tab') || '').toLowerCase();
+  const isTrackingRoute = location.pathname === '/tracking';
+
+  let activeTab = 'submit';
+  if (rawTab === 'lookup' || rawTab === 'track' || isTrackingRoute || initialTab === 'lookup') {
+    activeTab = 'lookup';
+  } else if (rawTab === 'history' || initialTab === 'history') {
+    activeTab = 'history';
+  } else {
+    activeTab = 'submit';
+  }
+
   const [submittedCode, setSubmittedCode] = useState(null);
   const [submittedData, setSubmittedData] = useState(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [formResetKey, setFormResetKey] = useState(0);
   const lookupRef = useRef(null);
+
+  // Lắng nghe sự kiện click [+ Gửi đơn mới] từ Sidebar khi người dân muốn xóa trắng form để soạn đơn mới
+  useEffect(() => {
+    const handleReset = () => {
+      setSubmittedCode(null);
+      setSubmittedData(null);
+      setFormResetKey((prev) => prev + 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+    window.addEventListener('citizen-reset-submit-form', handleReset);
+    return () => window.removeEventListener('citizen-reset-submit-form', handleReset);
+  }, []);
 
   const handleSubmitSuccess = (trackingCode, ticketData) => {
     setSubmittedCode(trackingCode);
     setSubmittedData(ticketData || null);
-    setIsModalOpen(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleSelectTicketForTracking = (codeToLookup) => {
-    if (codeToLookup && typeof codeToLookup === 'string') {
-      setSubmittedCode(codeToLookup);
+    const code = (typeof codeToLookup === 'string' && codeToLookup.trim()) ? codeToLookup.trim() : submittedCode;
+    if (code) {
+      setSubmittedCode(code);
+      setSearchParams({ tab: 'lookup', code });
+    } else {
+      setSearchParams({ tab: 'lookup' });
     }
-    setActiveTab('TRACK');
     if (lookupRef.current) {
       setTimeout(() => {
         lookupRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -38,107 +65,69 @@ export default function CitizenPortal() {
     }
   };
 
+  const handleGoToSubmit = () => {
+    setSubmittedCode(null);
+    setSearchParams({ tab: 'submit' });
+    setFormResetKey((prev) => prev + 1);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const effectiveLookupCode = submittedCode || searchParams.get('code') || searchParams.get('q') || '';
+
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+    <div className="max-w-4xl mx-auto px-2 sm:px-4 py-4 sm:py-6 space-y-5">
       
-      {/* 1. Tiêu Đề Cổng Dịch Vụ Công */}
-      <div className="gov-card p-6 sm:p-7 text-center space-y-2.5">
-        <div className="inline-flex items-center gap-1.5 bg-blue-50 text-gov-blue text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wider border border-blue-200">
+      {/* 1. Header Cổng Dịch Vụ Công */}
+      <div className="bg-white border border-[#E2E8F0] rounded-2xl p-6 sm:p-7 text-center space-y-3 shadow-xs">
+        <div className="inline-flex items-center gap-1.5 bg-[#EAF1FB] text-[#0B57D0] text-xs font-semibold px-3.5 py-1 rounded-full uppercase tracking-wider">
           <Landmark className="w-3.5 h-3.5" />
-          <span>Hệ Thống Dịch Vụ Công Trực Tuyến • Tỉnh Đồng Nai</span>
+          <span>CỔNG TIẾP NHẬN PHẢN ÁNH • TỈNH ĐỒNG NAI</span>
         </div>
-        <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
-          Cổng Tiếp Nhận Ý Kiến, Kiến Nghị & Phản Ánh
+        <h2 className="text-xl sm:text-2xl font-bold text-[#1F1F1F] tracking-tight">
+          Tiếp Nhận & Điều Phối Đơn Thư Trực Tuyến
         </h2>
-        <p className="text-slate-600 text-sm max-w-2xl mx-auto leading-relaxed">
-          Tiếp nhận, xử lý và phản hồi phản ánh, kiến nghị của người dân và doanh nghiệp 24/7 qua biểu mẫu trực tuyến và hòm thư điện tử tiếp nhận của tỉnh.
+        <p className="text-[#5F6368] text-xs sm:text-sm max-w-2xl mx-auto leading-relaxed">
+          Gửi phản ánh, kiến nghị trực tuyến hoặc tra cứu tiến độ xử lý hồ sơ hành chính 24/7.
         </p>
-
-        {/* THANH ĐIỀU HƯỚNG PHÂN HỆ CÔNG DÂN (TABS) */}
-        <div className="pt-3 max-w-2xl mx-auto">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-1 bg-slate-100 rounded-xl border border-slate-200">
-            <button
-              type="button"
-              onClick={() => setActiveTab('SUBMIT')}
-              className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-bold transition-all cursor-pointer ${
-                activeTab === 'SUBMIT'
-                  ? 'bg-[#1E3A8A] text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-              }`}
-            >
-              <Send className="w-4 h-4" />
-              <span>Gửi Phản Ánh</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('TRACK')}
-              className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-bold transition-all cursor-pointer ${
-                activeTab === 'TRACK'
-                  ? 'bg-[#1E3A8A] text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-              }`}
-            >
-              <Search className="w-4 h-4" />
-              <span>Tra Cứu Tiến Độ</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('HISTORY')}
-              className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-bold transition-all cursor-pointer ${
-                activeTab === 'HISTORY'
-                  ? 'bg-[#1E3A8A] text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-              }`}
-            >
-              <History className="w-4 h-4" />
-              <span>Lịch Sử Đã Gửi</span>
-            </button>
-          </div>
-        </div>
       </div>
 
-      {/* Modal Xác Nhận Nộp Hồ Sơ Chuẩn Hành Chính */}
-      <SubmissionModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        ticketData={submittedData}
-        onLookupNow={handleSelectTicketForTracking}
-      />
-
-      {/* 2. Biên Nhận Tiếp Nhận Điện Tử (Hiển thị khi nộp thành công) */}
-      {submittedCode && activeTab === 'SUBMIT' && (
+      {/* 2. MÀN HÌNH 1: BIÊN NHẬN ĐIỆN TỬ (KHI ĐÃ NỘP THÀNH CÔNG) HOẶC FORM GỬI PHẢN ÁNH */}
+      {activeTab === 'submit' && submittedCode && (
         <SubmissionReceipt
           trackingCode={submittedCode}
           ticketData={submittedData}
           onLookupNow={handleSelectTicketForTracking}
+          onNewSubmission={handleGoToSubmit}
         />
       )}
 
-      {/* 3. TAB 1: FORM GỬI PHẢN ÁNH TRỰC TUYẾN */}
-      {activeTab === 'SUBMIT' && (
+      {activeTab === 'submit' && !submittedCode && (
         <ComplaintSubmitForm
+          key={formResetKey}
           onSubmitSuccess={handleSubmitSuccess}
         />
       )}
 
-      {/* 4. TAB 2: KHUNG TRA CỨU TIẾN ĐỘ THEO MÃ HỒ SƠ (TIMELINE 4 BƯỚC) */}
-      {activeTab === 'TRACK' && (
+      {/* 3. MÀN HÌNH 2: KHUNG TRA CỨU TIẾN ĐỘ THEO MÃ HỒ SƠ */}
+      {activeTab === 'lookup' && (
         <ComplaintTrackingSection
           ref={lookupRef}
-          initialCode={submittedCode || ''}
+          initialCode={effectiveLookupCode}
         />
       )}
 
-      {/* 5. TAB 3: LỊCH SỬ ĐƠN THƯ ĐÃ GỬI GẮN VỚI TÀI KHOẢN CÔNG DÂN */}
-      {activeTab === 'HISTORY' && (
+      {/* 4. MÀN HÌNH 3: LỊCH SỬ ĐƠN THƯ ĐÃ GỬI */}
+      {activeTab === 'history' && (
         <CitizenComplaintHistory
           onSelectTicket={handleSelectTicketForTracking}
-          onGoToSubmit={() => setActiveTab('SUBMIT')}
+          onGoToSubmit={handleGoToSubmit}
         />
       )}
 
     </div>
   );
 }
+
+CitizenPortal.propTypes = {
+  initialTab: PropTypes.string,
+};

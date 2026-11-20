@@ -197,10 +197,10 @@ export const ticketService = {
         console.warn('Lỗi kết nối API submitTicket, dùng fallback local:', backendError.message);
       }
 
-      // Thuật toán đối soát từ khóa thông minh phân bổ 7 Sở / Một cửa (Fallback local)
+      // Thuật toán đối soát từ khóa thông minh phân bổ 7 Sở / Ban Tiếp công dân Tỉnh (Fallback local)
       const textLower = (data.raw_text || '').toLowerCase();
       let routedDept = 'UBND_CAP_HUYEN';
-      let deptName = 'Bộ phận Một cửa / UBND Cấp Huyện';
+      let deptName = 'Ban Tiếp công dân Tỉnh';
       let priority = 'TRUNG_BINH';
 
       if (textLower.includes('karaoke') || textLower.includes('ồn ào') || textLower.includes('tiếng ồn') || textLower.includes('trộm') || textLower.includes('an ninh') || textLower.includes('gây rối') || textLower.includes('loa kẹo kéo')) {
@@ -240,8 +240,9 @@ export const ticketService = {
         .replace(/\[Tiêu đề:[^\]]*\]/gi, '')
         .trim();
       if (!cleanSummary) cleanSummary = 'Phản ánh, kiến nghị trực tuyến của công dân';
-      if (cleanSummary.length > 120) {
-        cleanSummary = cleanSummary.slice(0, 120).trim() + '...';
+      if (cleanSummary.length > 300) {
+        const lastSpace = cleanSummary.lastIndexOf(' ', 300);
+        cleanSummary = (lastSpace > 100 ? cleanSummary.slice(0, lastSpace) : cleanSummary.slice(0, 300)).trim() + '...';
       }
 
       const newTicket = {
@@ -287,58 +288,15 @@ export const ticketService = {
   /**
    * Lấy lịch sử đơn thư của công dân: GET /api/citizen/my-tickets
    */
-  async getMyTickets(email = null) {
-    try {
-      const res = await httpClient.get('/api/citizen/my-tickets', {
-        params: email ? { email } : {}
-      });
-      if (Array.isArray(res)) return res;
-    } catch (e) {
-      console.error('Lỗi khi tải lịch sử đơn thư:', e);
-    }
-    if (email) {
-      return localTickets.filter(t => t.citizen_email?.toLowerCase() === email.toLowerCase());
-    }
-    return localTickets.filter(t => t.source === 'WEB_TEXT' || t.source === 'EMAIL');
+  async getMyTickets(signal) {
+    return httpClient.get('/api/citizen/my-tickets', { signal });
   },
 
   /**
    * 2. Lấy danh sách hồ sơ: GET /api/tickets
    */
   async getTickets(filters = {}) {
-    try {
-      try {
-        const res = await httpClient.get('/api/tickets', { params: filters });
-        if (Array.isArray(res)) return res;
-      } catch (e) {}
-
-      let result = [...localTickets];
-      if (filters.dept_code && filters.dept_code !== 'ALL') {
-        result = result.filter(t => t.dept_code === filters.dept_code);
-      }
-      if (filters.source && filters.source !== 'ALL') {
-        result = result.filter(t => t.source === filters.source);
-      }
-      if (filters.priority && filters.priority !== 'ALL') {
-        result = result.filter(t => t.priority === filters.priority);
-      }
-      if (filters.status && filters.status !== 'ALL') {
-        result = result.filter(t => t.status === filters.status);
-      }
-      if (filters.search) {
-        const q = filters.search.toLowerCase();
-        result = result.filter(t =>
-          (t.tracking_code && t.tracking_code.toLowerCase().includes(q)) ||
-          (t.raw_text && t.raw_text.toLowerCase().includes(q)) ||
-          (t.citizen_name && t.citizen_name.toLowerCase().includes(q)) ||
-          (t.ai_result?.summary && t.ai_result.summary.toLowerCase().includes(q))
-        );
-      }
-      return result;
-    } catch (err) {
-      console.error('Lỗi lấy danh sách hồ sơ:', err);
-      return localTickets;
-    }
+    return httpClient.get('/api/tickets', { params: filters });
   },
 
   /**
@@ -346,180 +304,69 @@ export const ticketService = {
    */
   async lookupTicket(trackingCode) {
     const cleanCode = trackingCode.trim().toUpperCase();
-    try {
-      const res = await httpClient.get(`/api/tickets/lookup/${encodeURIComponent(cleanCode)}`);
-      if (res && res.ticket_id) {
-        if (!res.ticket_code) res.ticket_code = res.tracking_code;
-        return res;
-      }
-    } catch (e) {}
-
-    const ticket = localTickets.find(t => 
-      (t.tracking_code && t.tracking_code.toUpperCase() === cleanCode) ||
-      (t.ticket_code && t.ticket_code.toUpperCase() === cleanCode)
-    );
-    if (!ticket) {
-      throw new Error(`Không tìm thấy hồ sơ với mã "${cleanCode}". Vui lòng kiểm tra lại.`);
-    }
-    return ticket;
+    return httpClient.get('/api/tickets/lookup/' + encodeURIComponent(cleanCode));
   },
 
   /**
    * 4. Cán bộ phê duyệt: PUT /api/tickets/{id}/approve
    */
-  async approveTicket(ticketId, approvalData) {
-    try {
-      const res = await httpClient.put(`/api/tickets/${ticketId}/approve`, approvalData);
-      if (res) return res;
-    } catch (e) {}
-
-    const idx = localTickets.findIndex(t => t.ticket_id === ticketId);
-    if (idx !== -1) {
-      localTickets[idx].status = 'APPROVED';
-      if (approvalData.draft_reply) {
-        localTickets[idx].ai_result.draft_reply = approvalData.draft_reply;
-      }
-      if (approvalData.extracted_text) {
-        localTickets[idx].ai_result.extracted_text = approvalData.extracted_text;
-      }
-      if (approvalData.department_code) {
-        localTickets[idx].dept_code = approvalData.department_code;
-      }
-      return { success: true, ticket: localTickets[idx] };
-    }
-    throw new Error('Hồ sơ không tồn tại.');
+  async approveTicket(ticketId, { draft_reply, extracted_text, department_code }) {
+    return httpClient.put('/api/tickets/' + ticketId + '/approve', {
+      draft_reply, extracted_text, department_code,
+    });
   },
 
   /**
-   * 4b. Chuyển cơ quan thụ lý thủ công: PUT /api/tickets/{id}/transfer
+   * 4a. Cán bộ lưu nháp kết quả xử lý: PUT /api/tickets/{id}/draft
+   */
+  async updateDraft(ticketId, draftData) {
+    return httpClient.put('/api/tickets/' + ticketId + '/draft', draftData);
+  },
+
+  /**
+   * 4b. Đánh dấu sao hồ sơ: PATCH /api/tickets/{id}/star
+   */
+  async toggleStarTicket(ticketId) {
+    return httpClient.patch('/api/tickets/' + ticketId + '/star');
+  },
+
+  /**
+   * 4c. Chuyển cơ quan thụ lý thủ công: PUT /api/tickets/{id}/transfer
    */
   async transferTicket(ticketId, transferData) {
-    let payload = {};
-    if (typeof transferData === 'string') {
-      payload = { target_dept: transferData, notes: '' };
-    } else if (transferData && typeof transferData === 'object') {
-      payload = {
-        target_dept: transferData.target_dept || transferData.department_code || 'REQUIRE_HUMAN_REVIEW',
-        notes: transferData.notes || transferData.reason || '',
-      };
-    }
-
-    try {
-      const res = await httpClient.put(`/api/tickets/${ticketId}/transfer`, payload);
-      if (res) return res;
-    } catch (e) {}
-
-    const idx = localTickets.findIndex(t => t.ticket_id === ticketId);
-    if (idx !== -1) {
-      const target = payload.target_dept;
-      localTickets[idx].dept_code = target;
-      localTickets[idx].status = target === 'REQUIRE_HUMAN_REVIEW' ? 'HUMAN_REVIEW' : 'ROUTED';
-      if (payload.notes) {
-        localTickets[idx].admin_note = payload.notes;
-      }
-      return { success: true, ticket: localTickets[idx] };
-    }
-    throw new Error('Hồ sơ không tồn tại.');
+    const data = typeof transferData === 'string' ? { target_dept: transferData } : transferData;
+    return httpClient.put('/api/tickets/' + ticketId + '/transfer', {
+      target_dept: data?.target_dept || data?.department_code || 'REQUIRE_HUMAN_REVIEW',
+      notes: data?.notes || data?.reason || '',
+    });
   },
 
   /**
    * 4c. Chuyển tuyến thủ công chính thức: PUT /api/tickets/{id}/reassign
    */
   async reassignTicket(ticketId, data) {
-    let payload = {
+    return httpClient.put('/api/tickets/' + ticketId + '/reassign', {
       department_code: data.department_code || data.target_dept || 'SO_GTVT',
       reason: data.reason || data.notes || '',
-      reassigned_by: data.reassigned_by || 'Cán bộ thụ lý',
-    };
-
-    try {
-      const res = await httpClient.put(`/api/tickets/${ticketId}/reassign`, payload);
-      if (res) return res;
-    } catch (e) {}
-
-    const idx = localTickets.findIndex(t => t.ticket_id === ticketId);
-    if (idx !== -1) {
-      const target = payload.department_code;
-      const deptNames = {
-        SO_GTVT: 'Sở Giao thông Vận tải',
-        SO_TNMT: 'Sở Tài nguyên & Môi trường',
-        SO_XD: 'Sở Xây dựng',
-        SO_XAYDUNG: 'Sở Xây dựng',
-        SO_YTE: 'Sở Y tế',
-        SO_GDDT: 'Sở Giáo dục & Đào tạo',
-        SO_LDTBXH: 'Sở Lao động - Thương binh & Xã hội',
-        CONG_AN_TINH: 'Công an Tỉnh Đồng Nai',
-        UBND_CAP_HUYEN: 'UBND Cấp Huyện / TP',
-        UBND_TINH: 'UBND Tỉnh Đồng Nai',
-        REQUIRE_HUMAN_REVIEW: 'Cần Phân Luồng Thủ Công'
-      };
-      localTickets[idx].dept_code = target;
-      localTickets[idx].department_code = target;
-      localTickets[idx].dept_name = deptNames[target] || target;
-      localTickets[idx].status = target === 'REQUIRE_HUMAN_REVIEW' ? 'HUMAN_REVIEW' : 'ROUTED';
-      const logEntry = `[${new Date().toLocaleString('vi-VN')}] ${payload.reassigned_by} chuyển tuyến sang ${localTickets[idx].dept_name}. Lý do: ${payload.reason}`;
-      localTickets[idx].admin_note = localTickets[idx].admin_note ? `${localTickets[idx].admin_note}\n${logEntry}` : logEntry;
-      return { success: true, ticket: localTickets[idx] };
-    }
-    throw new Error('Hồ sơ không tồn tại.');
+    });
   },
 
   /**
    * 5. Admin điều phối hồ sơ ngoại lệ: POST /api/admin/dispatch
    */
   async dispatchException(ticketId, targetDeptCode, note = '') {
-    const deptNames = {
-      SO_GTVT: 'Sở Giao thông Vận tải',
-      SO_TNMT: 'Sở Tài nguyên & Môi trường',
-      SO_XD: 'Sở Xây dựng',
-      SO_XAYDUNG: 'Sở Xây dựng',
-      SO_YTE: 'Sở Y tế',
-      SO_GDDT: 'Sở Giáo dục & Đào tạo',
-      SO_LDTBXH: 'Sở Lao động - Thương binh & Xã hội',
-      CONG_AN_TINH: 'Công an Tỉnh Đồng Nai',
-      UBND_CAP_HUYEN: 'UBND Cấp Huyện / TP',
-      UBND_TINH: 'UBND Tỉnh Đồng Nai',
-    };
-
-    try {
-      const res = await httpClient.post('/api/admin/dispatch', { 
-        ticket_id: ticketId, 
-        target_dept: targetDeptCode, 
-        note 
-      });
-      if (res) return res;
-    } catch (e) {}
-
-    const idx = localTickets.findIndex(t => t.ticket_id === ticketId);
-    if (idx !== -1) {
-      localTickets[idx].status = 'ROUTED';
-      localTickets[idx].dept_code = targetDeptCode;
-      localTickets[idx].dept_name = deptNames[targetDeptCode] || targetDeptCode;
-      if (note) {
-        localTickets[idx].admin_note = note;
-      }
-      return { success: true, ticket: localTickets[idx] };
-    }
-    throw new Error('Hồ sơ không tồn tại.');
+    return httpClient.post('/api/admin/dispatch', {
+      ticket_id: ticketId,
+      target_dept: targetDeptCode,
+      note,
+    });
   },
 
   /**
    * 6. Admin đánh dấu đơn rác: PUT /api/admin/tickets/{id}/spam
    */
   async markAsSpam(ticketId, reason = 'Đơn rác, không có sự việc cụ thể') {
-    try {
-      const res = await httpClient.put(`/api/admin/tickets/${ticketId}/spam`, { reason });
-      if (res) return res;
-    } catch (e) {}
-
-    const idx = localTickets.findIndex(t => t.ticket_id === ticketId);
-    if (idx !== -1) {
-      localTickets[idx].status = 'REJECTED';
-      localTickets[idx].dept_name = 'Đã Loại Bỏ (Đơn Rác)';
-      localTickets[idx].rejection_reason = reason;
-      return { success: true, ticket: localTickets[idx] };
-    }
-    throw new Error('Hồ sơ không tồn tại.');
+    return httpClient.put('/api/admin/tickets/' + ticketId + '/spam', { reason });
   },
 
   /**
@@ -536,6 +383,8 @@ export const ticketService = {
       SO_GTVT: localTickets.filter(t => t.dept_code === 'SO_GTVT').length,
       SO_TNMT: localTickets.filter(t => t.dept_code === 'SO_TNMT').length,
       SO_XD: localTickets.filter(t => t.dept_code === 'SO_XD' || t.dept_code === 'SO_XAYDUNG').length,
+      CONG_AN_TINH: localTickets.filter(t => t.dept_code === 'CONG_AN_TINH').length,
+      SO_YTE: localTickets.filter(t => t.dept_code === 'SO_YTE').length,
       UBND_CAP_HUYEN: localTickets.filter(t => t.dept_code === 'UBND_CAP_HUYEN').length,
       UBND_TINH: localTickets.filter(t => t.dept_code === 'UBND_TINH').length,
       REQUIRE_HUMAN_REVIEW: localTickets.filter(t => t.dept_code === 'REQUIRE_HUMAN_REVIEW' || t.status === 'HUMAN_REVIEW').length,
@@ -554,6 +403,8 @@ export const ticketService = {
         SO_GTVT: { code: 'SO_GTVT', name: 'Sở Giao thông Vận tải', count: byDept.SO_GTVT },
         SO_TNMT: { code: 'SO_TNMT', name: 'Sở Tài nguyên & Môi trường', count: byDept.SO_TNMT },
         SO_XD: { code: 'SO_XD', name: 'Sở Xây dựng', count: byDept.SO_XD },
+        CONG_AN_TINH: { code: 'CONG_AN_TINH', name: 'Công an Tỉnh Đồng Nai', count: byDept.CONG_AN_TINH },
+        SO_YTE: { code: 'SO_YTE', name: 'Sở Y tế', count: byDept.SO_YTE },
         UBND_CAP_HUYEN: { code: 'UBND_CAP_HUYEN', name: 'UBND Cấp Huyện / TP', count: byDept.UBND_CAP_HUYEN },
         UBND_TINH: { code: 'UBND_TINH', name: 'UBND Tỉnh Đồng Nai', count: byDept.UBND_TINH },
         REQUIRE_HUMAN_REVIEW: { code: 'REQUIRE_HUMAN_REVIEW', name: 'Hàng Đợi Ngoại Lệ', count: byDept.REQUIRE_HUMAN_REVIEW },
@@ -572,14 +423,8 @@ export const ticketService = {
   /**
    * Kích hoạt đồng bộ thư từ Gmail thật: POST /api/tickets/sync-gmail
    */
-  async syncGmail(params = {}) {
-    try {
-      const res = await httpClient.post('/api/tickets/sync-gmail', params);
-      return res;
-    } catch (err) {
-      const msg = err.response?.data?.detail || err.message || 'Lỗi kết nối đồng bộ Gmail.';
-      throw new Error(msg);
-    }
+  async syncGmail({ max_emails = 5 } = {}) {
+    return httpClient.post('/api/tickets/sync-gmail', null, { params: { max_emails } });
   },
 
   getImageUrl,

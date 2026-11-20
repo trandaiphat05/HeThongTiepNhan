@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import PropTypes from 'prop-types';
-import { FileUp, Upload, FileCheck } from 'lucide-react';
+import { Upload, FileCheck, AlertCircle } from 'lucide-react';
 import { api } from '../../../../services/api';
 
 /**
@@ -15,13 +15,15 @@ export default function RAGIngestForm({ onSuccess, onToast }) {
   const [ingestCategory, setIngestCategory] = useState('CHUNG');
   const [ingestContent, setIngestContent] = useState('');
   const [ingestFile, setIngestFile] = useState(null);
+  const [formError, setFormError] = useState(null);
   const [isIngesting, setIsIngesting] = useState(false);
   const fileInputRef = useRef(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setFormError(null);
     if (!ingestContent.trim() && !ingestFile) {
-      alert('Vui lòng nhập nội dung văn bản hoặc chọn tệp đính kèm (.pdf, .docx, .txt, .md).');
+      setFormError('Vui lòng nhập nội dung văn bản hoặc chọn tệp đính kèm (.pdf, .docx, .txt, .md).');
       return;
     }
 
@@ -45,7 +47,9 @@ export default function RAGIngestForm({ onSuccess, onToast }) {
 
       if (onSuccess) onSuccess();
     } catch (err) {
-      alert('Lỗi nạp văn bản: ' + (err.response?.data?.detail || err.message));
+      const msg = err.response?.data?.detail || err.message || 'Lỗi nạp văn bản';
+      setFormError(msg);
+      if (onToast) onToast('warning', 'Lỗi nạp văn bản: ' + msg);
     } finally {
       setIsIngesting(false);
     }
@@ -55,20 +59,18 @@ export default function RAGIngestForm({ onSuccess, onToast }) {
     setIngestTitle('');
     setIngestContent('');
     setIngestFile(null);
+    setFormError(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 bg-slate-50/70 p-4 sm:p-5 rounded-xl border border-slate-200/80">
-      <div className="border-b border-slate-200/80 pb-3">
-        <h4 className="text-sm font-bold text-slate-800 uppercase flex items-center gap-1.5">
-          <FileUp className="w-4 h-4 text-gov-blue" />
-          Nạp Văn Bản Quy Phạm Pháp Luật Mới
-        </h4>
-        <p className="text-xs text-slate-500 mt-0.5">
-          Tải lên tệp văn bản pháp luật (.pdf, .docx, .txt, .md) hoặc nhập văn bản. Hệ thống tự động phân tách theo từng Điều/Khoản lưu trữ vào CSDL.
-        </p>
-      </div>
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {formError && (
+        <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+          <span>{formError}</span>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="md:col-span-2 space-y-1">
@@ -93,11 +95,17 @@ export default function RAGIngestForm({ onSuccess, onToast }) {
             onChange={(e) => setIngestCategory(e.target.value)}
             className="gov-input text-xs sm:text-sm py-2 font-medium text-slate-800"
           >
-            <option value="CHUNG">Quy định chung - Phân cấp hành chính Tỉnh</option>
+            <option value="CHUNG">Quy định chung</option>
             <option value="SO_GTVT">Sở Giao thông Vận tải</option>
             <option value="SO_TNMT">Sở Tài nguyên & Môi trường</option>
-            <option value="SO_XD">Sở Xây dựng & Phát triển đô thị</option>
+            <option value="SO_XD">Sở Xây dựng</option>
+            <option value="SO_YTE">Sở Y tế</option>
+            <option value="SO_GDDT">Sở Giáo dục & Đào tạo</option>
+            <option value="SO_LDTBXH">Sở Lao động - Thương binh & Xã hội</option>
+            <option value="CONG_AN_TINH">Công an Tỉnh Đồng Nai</option>
+            <option value="BO_PHAN_MOT_CUA">Ban Tiếp công dân Tỉnh</option>
             <option value="UBND_CAP_HUYEN">UBND Cấp Huyện / TP</option>
+            <option value="REQUIRE_HUMAN_REVIEW">Tổ Tiếp nhận & Điều phối Đơn thư Tỉnh</option>
           </select>
         </div>
       </div>

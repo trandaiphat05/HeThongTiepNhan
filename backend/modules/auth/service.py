@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from modules.auth.models import User
 from modules.auth.schemas import UserCreateRequest, RegisterRequest, LinkGmailRequest
-from modules.notifications.email_worker import verify_gmail_imap_credentials
 
 JWT_SECRET = "dongnai_civic_ai_secret_key_2026_jwt"
 JWT_ALGORITHM = "HS256"
@@ -162,7 +161,7 @@ DEFAULT_ACCOUNTS = {
         "password": "officer123",
         "user_id": 6,
         "username": "canbo_motcua",
-        "full_name": "Vũ Thị Ngọc - Cán bộ Một cửa",
+        "full_name": "Vũ Thị Ngọc - Chuyên viên Tiếp công dân",
         "role": "OFFICER",
         "department_code": "UBND_CAP_HUYEN",
         "dept_code": "UBND_CAP_HUYEN",
@@ -214,7 +213,7 @@ def authenticate_user(db: Session, username: str, password: str) -> Dict[str, An
     """
     clean_username = username.strip().lower()
 
-    # 1. Kiểm tra tài khoản mặc định trước
+    # Kiểm tra tài khoản mặc định trước
     if clean_username in DEFAULT_ACCOUNTS:
         account = DEFAULT_ACCOUNTS[clean_username]
         if account["password"] == password or (clean_username in ["motcua_bienhoa", "canbo_motcua"] and password == "one123"):
@@ -232,7 +231,7 @@ def authenticate_user(db: Session, username: str, password: str) -> Dict[str, An
                 "last_synced_at": db_user.last_synced_at.strftime("%Y-%m-%d %H:%M:%S") if (db_user and db_user.last_synced_at) else None,
             }
 
-    # 2. Kiểm tra tài khoản trong bảng users CSDL
+    # Kiểm tra tài khoản trong bảng users CSDL
     db_user = db.query(User).filter(User.username == clean_username).first()
     if db_user:
         if not db_user.is_active:
@@ -277,6 +276,8 @@ def get_current_user_from_token(token: str, db: Session) -> Dict[str, Any]:
     # Kiểm tra trong DB trước để lấy dữ liệu đồng bộ mới nhất (Gmail, tên đầy đủ, v.v.)
     db_user = db.query(User).filter(User.username == username).first()
     if db_user:
+        if not db_user.is_active:
+            raise HTTPException(status_code=403, detail="Tài khoản đã bị vô hiệu hóa.")
         return {
             "user_id": db_user.user_id,
             "username": db_user.username,
@@ -345,11 +346,20 @@ def register_user(db: Session, req: RegisterRequest) -> Dict[str, Any]:
         if not req.dept_code:
             raise HTTPException(
                 status_code=400,
-                detail="Vui lòng chọn Đơn vị công tác (Sở GTVT, Sở TN&MT, Sở Xây dựng, UBND Cấp Huyện/TP)."
+                detail="Vui lòng chọn Đơn vị công tác trực thuộc tỉnh Đồng Nai."
             )
+        from core.departments import normalize_dept_code, DEPT_ALIAS_MAP
+        normalized_dept = normalize_dept_code(req.dept_code)
+        if normalized_dept not in DEPT_ALIAS_MAP.values():
+            raise HTTPException(
+                status_code=400,
+                detail="Mã đơn vị công tác không hợp lệ trong danh mục Sở/Ban/Ngành tỉnh Đồng Nai."
+            )
+        req_dept_code = normalized_dept
         is_active = False
         message = "Yêu cầu đăng ký tài khoản Cán bộ đã được ghi nhận và đang chờ Quản trị viên phê duyệt."
     else:
+        req_dept_code = None
         is_active = True
         message = f"Đăng ký tài khoản thành công cho Ông/Bà {req.full_name.strip()}! Tài khoản đã được kích hoạt."
 
@@ -361,7 +371,7 @@ def register_user(db: Session, req: RegisterRequest) -> Dict[str, Any]:
         phone=req.phone.strip() if req.phone else None,
         officer_code=req.officer_code.strip() if req.officer_code else None,
         role=user_role,
-        dept_code=req.dept_code if user_role == "OFFICER" else None,
+        dept_code=req_dept_code,
         is_active=is_active,
     )
     db.add(new_user)
@@ -399,11 +409,19 @@ def approve_officer_user(db: Session, user_id: int) -> User:
     return user
 
 
-def reject_officer_user(db: Session, user_id: int) -> Dict[str, Any]:
+def reject_officer_user(db: Session, user_id: int, current_user: Optional[dict] = None) -> Dict[str, Any]:
     """Quản trị viên từ chối và xóa yêu cầu đăng ký tài khoản cán bộ."""
+    caller_id = current_user.get("user_id") if isinstance(current_user, dict) else (getattr(current_user, "user_id", None) if current_user else None)
+    if user_id == 1 or (caller_id is not None and user_id == caller_id):
+        raise HTTPException(status_code=400, detail="Không được phép khóa hoặc xóa tài khoản Quản trị viên tối cao.")
+
     user = db.query(User).filter(User.user_id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="Không tìm thấy tài khoản cán bộ.")
+
+    if user.role == "ADMIN" or user.user_id == 1 or (caller_id is not None and user.user_id == caller_id):
+        raise HTTPException(status_code=400, detail="Không được phép khóa hoặc xóa tài khoản Quản trị viên tối cao.")
+
     user_name = user.full_name
     db.delete(user)
     db.commit()
@@ -419,14 +437,16 @@ def link_user_gmail(db: Session, current_user: dict, req: LinkGmailRequest) -> D
     - Bắt buộc phải xác thực thành công với máy chủ Gmail IMAP SSL (993)
     - Lưu email và mật khẩu ứng dụng an toàn vào CSDL
     """
-    # 1. Xác thực kết nối IMAP thật trước
+    # Xác thực kết nối IMAP trước
+    from modules.notifications.email_worker import verify_gmail_imap_credentials
+
     verify_gmail_imap_credentials(req.gmail_account, req.gmail_app_password)
 
     username = current_user.get("username")
     clean_account = req.gmail_account.strip()
     clean_password = req.gmail_app_password.strip().replace(" ", "")
 
-    # 2. Tìm hoặc tạo bản ghi user trong DB
+    # Tìm hoặc tạo bản ghi user trong DB
     db_user = db.query(User).filter(User.username == username).first()
     if not db_user:
         # Nếu là tài khoản mặc định chưa có dòng trong bảng users, tạo mới
@@ -476,6 +496,21 @@ def get_user_gmail_status(db: Session, current_user: dict) -> Dict[str, Any]:
     }
 
 
+def disconnect_user_gmail(db: Session, current_user: dict) -> Dict[str, Any]:
+    """Hủy liên kết tài khoản Gmail của người dùng hiện tại."""
+    username = current_user.get("username")
+    db_user = db.query(User).filter(User.username == username).first()
+    if db_user:
+        db_user.gmail_account = None
+        db_user.gmail_app_password = None
+        db_user.last_synced_at = None
+        db.commit()
+    return {
+        "success": True,
+        "message": "Đã hủy liên kết tài khoản Gmail thành công."
+    }
+
+
 def get_all_users(db: Session) -> List[User]:
     return db.query(User).order_by(User.user_id.asc()).all()
 
@@ -499,11 +534,18 @@ def create_new_user(db: Session, req: UserCreateRequest) -> User:
     return user
 
 
-def toggle_user_status(db: Session, user_id: int) -> bool:
+def toggle_user_status(db: Session, user_id: int, current_user: Optional[dict] = None) -> bool:
+    caller_id = current_user.get("user_id") if isinstance(current_user, dict) else (getattr(current_user, "user_id", None) if current_user else None)
+    if user_id == 1 or (caller_id is not None and user_id == caller_id):
+        raise HTTPException(status_code=400, detail="Không được phép khóa hoặc xóa tài khoản Quản trị viên tối cao.")
+
     user = db.query(User).filter(User.user_id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="Người dùng không tồn tại.")
-    
+
+    if user.role == "ADMIN" or user.user_id == 1 or (caller_id is not None and user.user_id == caller_id):
+        raise HTTPException(status_code=400, detail="Không được phép khóa hoặc xóa tài khoản Quản trị viên tối cao.")
+
     user.is_active = not user.is_active
     db.commit()
     return user.is_active

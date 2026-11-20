@@ -27,7 +27,7 @@ from core.config import settings, DOCS_DIR, BASE_DIR
 
 logger = logging.getLogger("DongNaiAIEngine")
 
-# 1. Đảm bảo nạp đúng API Key từ file .env (cả root và backend)
+# Đảm bảo nạp đúng API Key từ file .env
 root_dir = os.path.abspath(os.path.join(BASE_DIR, ".."))
 root_env = os.path.join(root_dir, ".env")
 backend_env = os.path.join(BASE_DIR, ".env")
@@ -45,6 +45,9 @@ else:
     logger.warning("[GEMINI INIT] ⚠️ Chưa tìm thấy GEMINI_API_KEY trong file .env!")
 
 DEFAULT_MODEL = os.getenv("GEMINI_MODEL", settings.GEMINI_MODEL) or "gemini-3.1-flash-lite"
+
+SIMILARITY_THRESHOLD = 0.65
+NO_LEGAL_DOC_MESSAGE = "Chưa tìm thấy căn cứ pháp lý trong kho dữ liệu - Cán bộ thụ lý cần bổ sung"
 
 
 def load_rules_from_docx(file_path: Optional[str] = None) -> str:
@@ -76,7 +79,7 @@ def load_rules_from_docx(file_path: Optional[str] = None) -> str:
             "- SO_YTE: Sở Y tế (SO_YT) - Quản lý bệnh viện, trạm y tế, phòng khám tư nhân, an toàn vệ sinh thực phẩm, ngộ độc thực phẩm, dịch bệnh truyền nhiễm, chính sách bảo hiểm y tế khám chữa bệnh, viện phí.\n"
             "- SO_GDDT: Sở Giáo dục và Đào tạo - Quản lý trường học các cấp, thu chi học phí, lạm thu, tuyển sinh đầu cấp, bạo lực học đường, tư cách nhà giáo và cơ sở vật chất đào tạo.\n"
             "- SO_LDTBXH: Sở Lao động - Thương binh và Xã hội - Quản lý chế độ tiền lương, chậm trả nợ lương, nợ đóng BHXH, bảo hiểm thất nghiệp, tranh chấp hợp đồng lao động, trợ cấp chính sách người có công, bảo trợ xã hội.\n"
-            "- UBND_CAP_HUYEN: Bộ phận Một cửa / UBND Cấp Huyện - Thủ tục hành chính một cửa cấp huyện/thành phố, cấp đổi giấy tờ hộ tịch, chứng thực, hòa giải tranh chấp cơ sở, hoặc các đơn thư chung chung chưa rõ lĩnh vực chuyên sâu để cán bộ một cửa điều phối thủ công. TUYỆT ĐỐI KHÔNG phân các vụ việc tiếng ồn, karaoke, an ninh trật tự về UBND_CAP_HUYEN.\n"
+            "- UBND_CAP_HUYEN: Ban Tiếp công dân Tỉnh / UBND Cấp Huyện - Tiếp nhận và điều phối đơn thư, thủ tục hành chính, cấp đổi giấy tờ hộ tịch, chứng thực, hòa giải tranh chấp cơ sở, hoặc các đơn thư chung chung chưa rõ lĩnh vực chuyên sâu để Chuyên viên Tiếp công dân điều phối thủ công. TUYỆT ĐỐI KHÔNG phân các vụ việc tiếng ồn, karaoke, an ninh trật tự về UBND_CAP_HUYEN.\n"
             "- REQUIRE_HUMAN_REVIEW: Đơn nặc danh khiêu khích xúc phạm, hoặc không đủ thông tin, đa ngành phức tạp cần điều phối thủ công."
         )
 
@@ -125,6 +128,12 @@ def compress_pil_in_memory(img, max_dim: int = 1600, quality: int = 80):
 
 def init_civic_router_agent(docx_law_path: Optional[str] = None, custom_rag_text: Optional[str] = None, model_name: Optional[str] = None):
     """Khởi tạo mô hình Gemini đóng vai trò DongNai-CivicRouter-AI với Structured Output."""
+    from datetime import datetime
+    now = datetime.now()
+    current_year = now.year
+    current_day = f"{now.day:02d}"
+    current_month = f"{now.month:02d}"
+
     target_model = model_name or DEFAULT_MODEL
     rag_content = custom_rag_text if custom_rag_text else load_rules_from_docx(docx_law_path)
 
@@ -156,8 +165,8 @@ Phân tích phản ánh (văn bản hoặc hình ảnh viết tay của công d�
 - SO_LDTBXH: Sở Lao động - Thương binh và Xã hội
   Thẩm quyền: Chế độ tiền lương, chậm trả nợ lương, nợ đóng BHXH, bảo hiểm thất nghiệp, tranh chấp hợp đồng lao động, tai nạn lao động, trợ cấp chính sách người có công, bảo trợ xã hội.
 
-- UBND_CAP_HUYEN: Bộ phận Một cửa / UBND Cấp Huyện
-  Thẩm quyền: Thủ tục hành chính quầy Một cửa cấp huyện/thành phố, cấp đổi giấy tờ hộ tịch, chứng thực, hòa giải tranh chấp dân sự nhỏ lẻ tại cơ sở, hoặc các đơn thư chung chung chưa rõ lĩnh vực chuyên sâu để cán bộ một cửa điều phối thủ công. TUYỆT ĐỐI KHÔNG phân các vụ việc tiếng ồn, karaoke (về CONG_AN_TINH) hoặc đất đai, sổ đỏ, môi trường (về SO_TNMT) về UBND_CAP_HUYEN.
+- UBND_CAP_HUYEN: Ban Tiếp công dân Tỉnh / UBND Cấp Huyện
+  Thẩm quyền: Tiếp nhận đơn thư, thủ tục hành chính, cấp đổi giấy tờ hộ tịch, chứng thực, hòa giải tranh chấp dân sự nhỏ lẻ tại cơ sở, hoặc các đơn thư chung chung chưa rõ lĩnh vực chuyên sâu để Chuyên viên Tiếp công dân điều phối thủ công. TUYỆT ĐỐI KHÔNG phân các vụ việc tiếng ồn, karaoke (về CONG_AN_TINH) hoặc đất đai, sổ đỏ, môi trường (về SO_TNMT) về UBND_CAP_HUYEN.
 
 - REQUIRE_HUMAN_REVIEW: Đơn nặc danh khiêu khích xúc phạm vô nghĩa, hoặc hồ sơ đa ngành đặc biệt phức tạp cần Admin can thiệp.
 
@@ -167,15 +176,30 @@ Nếu có nhiều ảnh, hãy đọc theo trình tự logic, nối toàn bộ n�
 ## 3. Căn cứ Pháp luật (RAG Context)
 {rag_content}
 
-## 4. Thể thức Dự thảo (`draft_reply` / `draft_response`)
-Tuân thủ thể thức văn bản hành chính Việt Nam theo Nghị định 30/2020/NĐ-CP:
-CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM / Độc lập - Tự do - Hạnh phúc
-Số: .../TB-[MÃ CƠ QUAN] | Đồng Nai, ngày ... tháng ... năm ...
-THÔNG BÁO V/v trả lời phản ánh của công dân
-Kính gửi: Quý công dân
-Căn cứ: (Trích dẫn điều khoản luật phù hợp từ RAG)
-Nội dung: Tiếp nhận, phân công cơ quan có thẩm quyền kiểm tra và biện pháp xử lý.
-Nơi nhận: Công dân; Lãnh đạo đơn vị; Lưu VT.
+## 4. Thể thức Dự thảo Văn bản Hành chính (`draft_reply`)
+BẮT BUỘC tuân thủ đúng thể thức văn bản hành chính Việt Nam theo Nghị định 30/2020/NĐ-CP:
+- TUYỆT ĐỐI KHÔNG dùng dấu gạch chéo '/' hoặc gạch đứng '|' để nối các dòng. Phải xuống dòng (\\n) rõ ràng giữa từng mục.
+- Quốc hiệu, Tiêu ngữ:
+CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM
+Độc lập - Tự do - Hạnh phúc
+-------------------------------
+- Tên cơ quan ban hành và Địa danh, ngày tháng năm:
+Bắt buộc dùng năm hiện tại ({current_year}), ngày tháng thực tế (Đồng Nai, ngày {current_day} tháng {current_month} năm {current_year}). TUYỆT ĐỐI KHÔNG dùng năm 2024 hay 2025.
+- Số ký hiệu văn bản:
+BẮT BUỘC dùng định dạng placeholder 'Số: .../TB-[MÃ_CƠ_QUAN]' (Ví dụ: 'Số: .../TB-SGTVT', 'Số: .../TB-STNMT', 'Số: .../TB-SXD', 'Số: .../TB-CAT', 'Số: .../TB-UBND'). TUYỆT ĐỐI CẤM tự ý bịa số cụ thể như 'Số: 123/'.
+- Tiêu đề văn bản:
+THÔNG BÁO
+V/v trả lời phản ánh, kiến nghị của công dân
+- Kính gửi: Ông/Bà [Tên công dân nếu có, hoặc Quý công dân],
+- Căn cứ pháp lý: Trích dẫn rõ điều khoản luật phù hợp từ RAG Context.
+- Nội dung trả lời: Nêu rõ việc tiếp nhận, cử tổ xác minh hiện trường, biện pháp và thời hạn giải quyết.
+- QUY TẮC BẮT BUỘC VỀ ĐỊA CHỈ: Nếu trong đơn thư/phản ánh của công dân KHÔNG nêu rõ địa chỉ cụ thể (tên đường, số nhà, khu phố/thôn ấp, phường/xã), phần nội dung trả lời BẮT BUỘC phải có câu:
+"Đề nghị Ông/Bà cung cấp bổ sung thông tin địa chỉ, vị trí cụ thể của vụ việc để cơ quan chức năng có cơ sở kiểm tra và xử lý thực tế."
+- Nơi nhận:
+Nơi nhận:
+- Công dân (để biết);
+- Ban Giám đốc Sở / Lãnh đạo đơn vị;
+- Lưu: VT, Tổ Tiếp nhận.
 """
 
     return genai.GenerativeModel(
@@ -289,12 +313,12 @@ def load_and_normalize_images(images_input) -> list:
     return loaded
 
 
-def classify_complaint_fallback(user_text: str) -> dict:
+def classify_complaint_fallback(user_text: str, legal_context: Optional[str] = None) -> dict:
     """
     Fallback phân loại dựa trên đối sánh từ khóa thông minh (Keyword Matching)
     khi Gemini API gặp sự cố (mạng, hạn mức, sai khóa API).
-    Phủ toàn diện 7 Sở/Ban/Ngành chính thức của tỉnh Đồng Nai và Một cửa.
-    Nếu đơn không rõ lĩnh vực, chuyển về UBND_CAP_HUYEN (Một cửa) điều phối thủ công,
+    Phủ toàn diện 7 Sở/Ban/Ngành chính thức của tỉnh Đồng Nai và Ban Tiếp công dân Tỉnh.
+    Nếu đơn không rõ lĩnh vực, chuyển về UBND_CAP_HUYEN (Ban Tiếp công dân Tỉnh) điều phối thủ công,
     TUYỆT ĐỐI KHÔNG mặc định gán SO_GTVT.
     """
     t = (user_text or "").lower()
@@ -341,7 +365,7 @@ def classify_complaint_fallback(user_text: str) -> dict:
             "người lao động", "hợp đồng lao động", "chính sách xã hội"
         ],
         "UBND_CAP_HUYEN": [
-            "hộ tịch", "chứng thực", "hòa giải", "thủ tục hành chính", "một cửa", "khai sinh", "khai tử",
+            "hộ tịch", "chứng thực", "hòa giải", "thủ tục hành chính", "tiếp công dân", "ban tiếp công dân", "khai sinh", "khai tử",
             "kết hôn", "xác nhận dân sự", "ubnd huyện", "ubnd xã", "ubnd phường", "ủy ban nhân dân", "cấp huyện"
         ]
     }
@@ -390,7 +414,7 @@ def classify_complaint_fallback(user_text: str) -> dict:
         "SO_YTE": "Luật An toàn thực phẩm và Luật Khám bệnh, chữa bệnh về bảo vệ và chăm sóc sức khỏe nhân dân.",
         "SO_GDDT": "Luật Giáo dục 2019 và Điều lệ trường học ban hành theo Thông tư của Bộ Giáo dục và Đào tạo.",
         "SO_LDTBXH": "Bộ luật Lao động 2019 và Luật Bảo hiểm xã hội quy định về quyền lợi người lao động và an sinh xã hội.",
-        "UBND_CAP_HUYEN": "Luật Tiếp công dân 2013 và Luật Tổ chức chính quyền địa phương quy định về giải quyết thủ tục hành chính một cửa cấp huyện/xã.",
+        "UBND_CAP_HUYEN": "Luật Tiếp công dân 2013 và Luật Tổ chức chính quyền địa phương quy định về giải quyết thủ tục hành chính và tiếp công dân.",
         "REQUIRE_HUMAN_REVIEW": "Quy chế tiếp nhận và điều phối đơn thư của UBND tỉnh Đồng Nai."
     }
 
@@ -402,8 +426,8 @@ def classify_complaint_fallback(user_text: str) -> dict:
         "SO_YTE": "Sở Y tế",
         "SO_GDDT": "Sở Giáo dục và Đào tạo",
         "SO_LDTBXH": "Sở Lao động - Thương binh và Xã hội",
-        "UBND_CAP_HUYEN": "Bộ phận Một cửa / UBND Cấp Huyện",
-        "REQUIRE_HUMAN_REVIEW": "Bộ phận Một cửa / UBND Cấp Huyện"
+        "UBND_CAP_HUYEN": "Ban Tiếp công dân Tỉnh",
+        "REQUIRE_HUMAN_REVIEW": "Ban Tiếp công dân Tỉnh"
     }
 
     import re
@@ -414,14 +438,17 @@ def classify_complaint_fallback(user_text: str) -> dict:
     if not cleaned_text:
         cleaned_text = user_text.strip()
 
-    clean_summary = cleaned_text[:120].strip()
-    if len(cleaned_text) > 120:
-        clean_summary = clean_summary.rsplit(" ", 1)[0] + "..."
+    clean_summary = cleaned_text
+    if len(cleaned_text) > 300:
+        clean_summary = cleaned_text[:300].rsplit(" ", 1)[0] + "..."
     if not clean_summary:
         clean_summary = "Phản ánh, kiến nghị trực tuyến của công dân"
 
     dept_label = dept_names.get(assigned_dept, assigned_dept)
-    legal_basis = legal_bases.get(assigned_dept, "Quy chế tiếp nhận và điều phối đơn thư tỉnh Đồng Nai.")
+    if legal_context == NO_LEGAL_DOC_MESSAGE:
+        legal_basis = NO_LEGAL_DOC_MESSAGE
+    else:
+        legal_basis = legal_bases.get(assigned_dept, "Quy chế tiếp nhận và điều phối đơn thư tỉnh Đồng Nai.")
     draft = f"Kính gửi Quý công dân, phản ánh của quý vị đã được hệ thống tiếp nhận và chuyển đến {dept_label} để thẩm tra, kiểm tra thực địa và xử lý theo thẩm quyền."
 
     return {
@@ -464,7 +491,8 @@ def analyze_ticket(
             f"-------------------------------------------------------------------\n\n"
         )
 
-    if legal_context and legal_context.strip():
+    has_valid_legal = bool(legal_context and legal_context.strip() and legal_context.strip() != NO_LEGAL_DOC_MESSAGE)
+    if has_valid_legal:
         main_prompt = (
             f"{multi_page_guidance}"
             f"--- CĂN CỨ PHÁP LUẬT TỈNH ĐỒNG NAI LIÊN QUAN NHẤT (RAG CONTEXT) ---\n"
@@ -476,11 +504,26 @@ def analyze_ticket(
             f"Yêu cầu xử lý bắt buộc:\n"
             f"1. Trích dẫn chính xác tên luật, điều khoản áp dụng vào trường `legal_basis`.\n"
             f"2. Soạn thảo văn bản phản hồi công dân (`draft_response`) đúng chuẩn Nghị định 30.\n"
-            f"3. Xác định đúng cơ quan có thẩm quyền trong 7 Sở/Ban/Ngành hoặc Một cửa (`department_code`), mức độ ưu tiên (`priority`), và trích xuất thực thể (`entities`).\n"
+            f"3. Xác định đúng cơ quan có thẩm quyền trong 7 Sở/Ban/Ngành hoặc Ban Tiếp công dân Tỉnh (`department_code`), mức độ ưu tiên (`priority`), và trích xuất thực thể (`entities`).\n"
             f"4. Trường `summary` phải tóm tắt sự việc cốt lõi dưới 30 từ bằng tiếng Việt tự nhiên, KHÔNG sao chép nhãn tiền tố kỹ thuật như [Tiêu đề: ...] hay [Địa chỉ: ...]."
         )
     else:
-        main_prompt = f"{multi_page_guidance}{user_input_text}"
+        main_prompt = (
+            f"{multi_page_guidance}"
+            f"--- CĂN CỨ PHÁP LUẬT TỈNH ĐỒNG NAI (RAG CONTEXT) ---\n"
+            f"Không có văn bản pháp luật nào trong kho dữ liệu đạt độ tương đồng >= {SIMILARITY_THRESHOLD}.\n"
+            f"NGHIÊM CẤM TỰ BỊA ĐẶT CĂN CỨ PHÁP LUẬT (FORBID HALLUCINATING LAW).\n"
+            f"Trường `legal_basis` BẮT BUỘC ĐIỀN ĐÚNG NGUYÊN VĂN: \"{NO_LEGAL_DOC_MESSAGE}\".\n"
+            f"-------------------------------------------------------------------\n\n"
+            f"--- NỘI DUNG ĐƠN THƯ PHẢN ÁNH CỦA NGƯỜI DÂN CẦN XỬ LÝ ---\n"
+            f"{user_input_text}\n"
+            f"---------------------------------------------------------\n\n"
+            f"Yêu cầu xử lý bắt buộc:\n"
+            f"1. Trường `legal_basis` BẮT BUỘC ĐIỀN CHÍNH XÁC: \"{NO_LEGAL_DOC_MESSAGE}\".\n"
+            f"2. Soạn thảo văn bản phản hồi công dân (`draft_response`) đúng chuẩn Nghị định 30.\n"
+            f"3. Xác định đúng cơ quan có thẩm quyền trong 7 Sở/Ban/Ngành hoặc Ban Tiếp công dân Tỉnh (`department_code`), mức độ ưu tiên (`priority`), và trích xuất thực thể (`entities`).\n"
+            f"4. Trường `summary` phải tóm tắt sự việc cốt lõi dưới 30 từ bằng tiếng Việt tự nhiên."
+        )
 
     contents = [main_prompt, *loaded_images]
 
@@ -488,11 +531,11 @@ def analyze_ticket(
 
     cur_key = settings.GEMINI_API_KEY or os.getenv("GEMINI_API_KEY", "")
     if not cur_key or cur_key.strip() == "" or cur_key == "your_gemini_api_key_here":
-        print("[GEMINI FALLBACK] - Lý do: Chưa cấu hình GEMINI_API_KEY trong file .env", flush=True)
-        return classify_complaint_fallback(user_input_text)
+        logger.warning("[Gemini AI Engine] GEMINI_API_KEY chưa được cấu hình. Kích hoạt phân loại dự phòng.")
+        return classify_complaint_fallback(user_input_text, legal_context=legal_context)
 
     # Danh sách các model ứng viên để tự động fallback nếu model chính bị 404 hoặc không hỗ trợ
-    candidate_models = [DEFAULT_MODEL, "gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash"]
+    candidate_models = [DEFAULT_MODEL, "gemini-3.1-flash-lite", "gemini-1.5-flash"]
     # Khử trùng lặp
     models_to_try = []
     for m in candidate_models:
@@ -503,7 +546,7 @@ def analyze_ticket(
     for m_name in models_to_try:
         try:
             active_model = get_ai_model(model_name=m_name)
-            response = active_model.generate_content(contents, request_options={"timeout": 30})
+            response = active_model.generate_content(contents, request_options={"timeout": 15})
             result = json.loads(response.text)
 
             # Đồng bộ hoá tên trường giữa draft_response và draft_reply
@@ -511,6 +554,9 @@ def analyze_ticket(
                 result["draft_reply"] = result["draft_response"]
             elif "draft_reply" in result and "draft_response" not in result:
                 result["draft_response"] = result["draft_reply"]
+
+            if not has_valid_legal:
+                result["legal_basis"] = NO_LEGAL_DOC_MESSAGE
 
             dept_map = {
                 "CONG_AN_TINH": "CONG_AN_TINH", "CONG_AN": "CONG_AN_TINH", "CA_TINH": "CONG_AN_TINH", "CAT": "CONG_AN_TINH",
@@ -538,9 +584,7 @@ def analyze_ticket(
             if result.get("confidence_score", 0) < 0.65:
                 result["department_code"] = "REQUIRE_HUMAN_REVIEW"
 
-            # In rõ dòng [GEMINI SUCCESS] theo yêu cầu
-            print(f"[GEMINI SUCCESS] Phân tích thành công bằng model {m_name} | Đơn vị: {result.get('department_code')} | Độ tin cậy: {int(result.get('confidence_score', 0)*100)}% | Tóm tắt: {result.get('summary', '')[:60]}", flush=True)
-            logger.info(f"[Gemini AI Engine] ✓ Phân tích hoàn tất: {result.get('department_code')} (Độ tin cậy: {result.get('confidence_score')})")
+            logger.info(f"[Gemini AI Engine] Phân tích thành công bằng model {m_name} | Đơn vị: {result.get('department_code')} | Độ tin cậy: {int(result.get('confidence_score', 0)*100)}% | Tóm tắt: {result.get('summary', '')[:60]}")
             return result
 
         except TooManyRequests as tmr:
@@ -560,10 +604,9 @@ def analyze_ticket(
                 continue
 
     # Nếu toàn bộ các model đều lỗi hoặc mất kết nối -> Kích hoạt Fallback
-    print(f"[GEMINI FALLBACK] - Lý do lỗi: {last_error}", flush=True)
-    print("[Gemini AI Engine] Kích hoạt phân loại Fallback Keyword Matching...", flush=True)
-    fb_res = classify_complaint_fallback(user_input_text)
-    print(f"[GEMINI FALLBACK] Đã định tuyến dự phòng về: {fb_res.get('department_code')} ({fb_res.get('dept_name', '')}) | Căn cứ: {fb_res.get('legal_basis')} | Độ tin cậy: {int(fb_res.get('confidence_score', 0)*100)}%", flush=True)
+    logger.warning(f"[Gemini AI Engine] Lỗi khi gọi Gemini ({last_error}). Kích hoạt phân loại Fallback Keyword Matching...")
+    fb_res = classify_complaint_fallback(user_input_text, legal_context=legal_context)
+    logger.info(f"[Gemini AI Engine] Đã định tuyến dự phòng về: {fb_res.get('department_code')} ({fb_res.get('dept_name', '')}) | Căn cứ: {fb_res.get('legal_basis')} | Độ tin cậy: {int(fb_res.get('confidence_score', 0)*100)}%")
     return fb_res
 
 

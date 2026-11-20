@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROOT_DIR = os.path.abspath(os.path.join(BASE_DIR, ".."))
 
-# 1. Nạp triệt để file .env từ cả thư mục gốc và thư mục backend
+# Nạp biến môi trường từ file .env
 root_env = os.path.join(ROOT_DIR, ".env")
 backend_env = os.path.join(BASE_DIR, ".env")
 

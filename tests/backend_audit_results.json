@@ -1,0 +1,104 @@
+[
+  {
+    "severity": "P0",
+    "route": "POST /api/rag/ingest",
+    "issue": "Endpoint thiếu xác thực (Unauthenticated access permitted, returned 400)",
+    "response": "{\"detail\":\"Vui lòng nhập nội dung văn bản hoặc đính kèm tệp PDF/DOCX/TXT hợp lệ.\"}"
+  },
+  {
+    "severity": "P0",
+    "route": "POST /api/admin/rag",
+    "issue": "Endpoint thiếu xác thực (Unauthenticated access permitted, returned 400)",
+    "response": "{\"detail\":\"Vui lòng nhập nội dung văn bản hoặc đính kèm tệp PDF/DOCX/TXT hợp lệ.\"}"
+  },
+  {
+    "severity": "P0",
+    "route": "DELETE /api/rag/docs/1",
+    "issue": "Endpoint thiếu xác thực (Unauthenticated access permitted, returned 404)",
+    "response": "{\"detail\":\"Không tìm thấy đoạn luật với ID 1\"}"
+  },
+  {
+    "severity": "P1",
+    "route": "POST /api/notifications/link-gmail",
+    "issue": "Endpoint thiếu xác thực (Unauthenticated access permitted, returned 400)",
+    "response": "{\"detail\":\"Xác thực Gmail thất bại. Vui lòng kiểm tra:\\n1. Tài khoản Google đã bật 'Xác minh 2 bước' (2-Step Verification).\\n2. Sử dụng đúng 'Mật khẩu ứng dụng' (App Password - 16 ký tự) chứ không phả"
+  },
+  {
+    "severity": "P1",
+    "route": "POST /api/gmail/link",
+    "issue": "Endpoint thiếu xác thực (Unauthenticated access permitted, returned 400)",
+    "response": "{\"detail\":\"Xác thực Gmail thất bại. Vui lòng kiểm tra:\\n1. Tài khoản Google đã bật 'Xác minh 2 bước' (2-Step Verification).\\n2. Sử dụng đúng 'Mật khẩu ứng dụng' (App Password - 16 ký tự) chứ không phả"
+  },
+  {
+    "severity": "P0",
+    "route": "POST /api/notifications/disconnect-gmail",
+    "issue": "Endpoint thiếu xác thực (Unauthenticated access permitted, returned 200)",
+    "response": "{\"success\":true,\"message\":\"Đã hủy liên kết tài khoản Gmail thành công.\"}"
+  },
+  {
+    "severity": "P0",
+    "route": "POST /api/gmail/disconnect",
+    "issue": "Endpoint thiếu xác thực (Unauthenticated access permitted, returned 200)",
+    "response": "{\"success\":true,\"message\":\"Đã hủy liên kết tài khoản Gmail thành công.\"}"
+  },
+  {
+    "severity": "P1",
+    "route": "GET /api/citizen/my-tickets?email=test@example.com",
+    "issue": "Endpoint thiếu xác thực (Unauthenticated access permitted, returned 200)",
+    "response": "[]"
+  },
+  {
+    "severity": "P0",
+    "route": "CITIZEN -> POST /api/rag/ingest",
+    "issue": "Tài khoản CITIZEN thực hiện được thao tác bị cấm (Status 400)",
+    "response": "{\"detail\":\"Vui lòng nhập nội dung văn bản hoặc đính kèm tệp PDF/DOCX/TXT hợp lệ.\"}"
+  },
+  {
+    "severity": "P1",
+    "route": "OFFICER -> POST /api/rag/ingest",
+    "issue": "Tài khoản OFFICER thực hiện được endpoint của ADMIN (Status 400)",
+    "response": "{\"detail\":\"Vui lòng nhập nội dung văn bản hoặc đính kèm tệp PDF/DOCX/TXT hợp lệ.\"}"
+  },
+  {
+    "severity": "P1",
+    "route": "OFFICER -> DELETE /api/rag/docs/1",
+    "issue": "Tài khoản OFFICER thực hiện được endpoint của ADMIN (Status 404)",
+    "response": "{\"detail\":\"Không tìm thấy đoạn luật với ID 1\"}"
+  },
+  {
+    "severity": "P1",
+    "route": "GET /api/citizen/my-tickets?email=...",
+    "issue": "IDOR / Tiết lộ thông tin: Bất kỳ ai không đăng nhập cũng có thể tra cứu toàn bộ danh sách đơn thư của một email bất kỳ",
+    "response": "Returned 200 with 1 items"
+  },
+  {
+    "severity": "P1",
+    "route": "POST /api/rag/ingest",
+    "issue": "Kho RAG chấp nhận nạp tệp virus.bat mà không xác thực định dạng hoặc độ an toàn",
+    "response": "{\"success\":true,\"document_title\":\"Tài liệu virus.bat\",\"category\":\"CHUNG\",\"total_chunks\":0,\"message\":\"Đã bóc tách và lưu trữ thành công 0 đoạn quy phạm pháp luật vào CSDL.\"}"
+  },
+  {
+    "severity": "P1",
+    "route": "POST /api/rag/ingest",
+    "issue": "Kho RAG chấp nhận nạp tệp malware.exe mà không xác thực định dạng hoặc độ an toàn",
+    "response": "{\"success\":true,\"document_title\":\"Tài liệu malware.exe\",\"category\":\"CHUNG\",\"total_chunks\":0,\"message\":\"Đã bóc tách và lưu trữ thành công 0 đoạn quy phạm pháp luật vào CSDL.\"}"
+  },
+  {
+    "severity": "P1",
+    "route": "POST /api/rag/ingest",
+    "issue": "Kho RAG chấp nhận nạp tệp giant_file.txt mà không xác thực định dạng hoặc độ an toàn",
+    "response": "{\"success\":true,\"document_title\":\"Tài liệu giant_file.txt\",\"category\":\"CHUNG\",\"total_chunks\":27942,\"message\":\"Đã bóc tách và lưu trữ thành công 27942 đoạn quy phạm pháp luật vào CSDL.\"}"
+  },
+  {
+    "severity": "P1",
+    "route": "PUT /api/tickets/59/reassign",
+    "issue": "Hồ sơ đã APPROVED/RESOLVED vẫn cho phép Cán bộ/Admin chuyển tuyến (reassign) và reset trạng thái về ROUTED!",
+    "response": "{\"success\":true,\"message\":\"Đã chuyển hồ sơ sang Sở Xây dựng.\",\"ticket_id\":59,\"ticket_code\":\"ĐN-20261120-4699\",\"tracking_code\":\"ĐN-20261120-4699\",\"department_code\":\"SO_XD\",\"dept_code\":\"SO_XD\",\"dept_nam"
+  },
+  {
+    "severity": "P2",
+    "route": "PUT /api/tickets/59/draft",
+    "issue": "Hồ sơ đã hoàn tất phê duyệt văn bản vẫn cho phép chỉnh sửa nội dung bản thảo trả lời mà không có kiểm soát phiên bản",
+    "response": "{\"success\":true,\"message\":\"Đã lưu bản thảo phản hồi thành công.\",\"ticket\":{\"ticket_id\":59,\"ticket_code\":\"ĐN-20261120-4699\",\"tracking_code\":\"ĐN-20261120-4699\",\"source\":\"WEB_TEXT\",\"citizen_name\":\"Nguyễn"
+  }
+]

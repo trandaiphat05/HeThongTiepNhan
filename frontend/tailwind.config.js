@@ -7,23 +7,31 @@ export default {
   theme: {
     extend: {
       colors: {
+        gmail: {
+          canvas: '#F6F8FC',
+          surface: '#FFFFFF',
+          border: '#E2E8F0',
+          primary: '#0B57D0',
+          primaryHover: '#0842A0',
+          composeBg: '#C2E7FF',
+          composeText: '#001D35',
+          navActiveBg: '#D3E3FD',
+          navActiveText: '#041E49',
+          text: '#1F1F1F',
+          secondary: '#5F6368',
+        },
         gov: {
           blue: {
-            DEFAULT: '#1E3A8A', // Xanh dương đậm hành chính
-            dark: '#172554',
+            DEFAULT: '#0B57D0',
+            dark: '#0842A0',
             light: '#1D4ED8',
-            surface: '#EFF6FF',
-          },
-          gold: {
-            DEFAULT: '#F59E0B', // Vàng hổ phách điểm nhấn
-            dark: '#D97706',
-            light: '#FEF3C7',
+            surface: '#EAF1FB',
           },
           slate: {
-            bg: '#F8FAFC', // Nền tổng thể
-            card: '#FFFFFF', // Nền thẻ nội dung
-            text: '#0F172A', // Chữ tương phản cao
-            muted: '#475569',
+            bg: '#F6F8FC',
+            card: '#FFFFFF',
+            text: '#1F1F1F',
+            muted: '#5F6368',
             border: '#E2E8F0',
           },
           danger: '#DC2626',
@@ -36,15 +44,16 @@ export default {
         xs: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
       },
       fontSize: {
-        base: ['1rem', { lineHeight: '1.65rem' }], // Cỡ chữ tối thiểu 16px
+        base: ['0.875rem', { lineHeight: '1.5rem' }],
       },
       fontFamily: {
         sans: [
           'Inter',
+          'Roboto',
+          'system-ui',
           '-apple-system',
           'BlinkMacSystemFont',
           '"Segoe UI"',
-          'Roboto',
           '"Helvetica Neue"',
           'Arial',
           'sans-serif',
@@ -54,4 +63,3 @@ export default {
   },
   plugins: [],
 };
-
