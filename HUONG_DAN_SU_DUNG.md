@@ -98,9 +98,9 @@ Hệ thống đã tích hợp sẵn 2 kịch bản tự động hóa cho hệ đ
 - **Tiến trình tự động:**
   1. Mở cửa sổ 1: Kích hoạt môi trường ảo Python và khởi chạy Backend FastAPI trên cổng **8000**.
   2. Đợi 2 giây để Socket và Database sẵn sàng.
-  3. Mở cửa sổ 2: Khởi chạy Frontend React Vite trên cổng **3000**.
+  3. Mở cửa sổ 2: Khởi chạy Frontend React Vite trên cổng **5173**.
 - **Địa chỉ truy cập:**
-  - **Cổng Dịch vụ công & Bàn làm việc:** `http://localhost:3000`
+  - **Cổng Dịch vụ công & Bàn làm việc:** `http://localhost:5173`
   - **Tài liệu API Swagger UI:** `http://localhost:8000/docs`
   - **Kiểm tra trạng thái Health Check:** `http://localhost:8000/health`
 
@@ -109,7 +109,7 @@ Hệ thống đã tích hợp sẵn 2 kịch bản tự động hóa cho hệ đ
   ```cmd
   .\stop.bat
   ```
-- Kịch bản sẽ tự động giải phóng sạch sẽ các tiến trình `uvicorn.exe`, `python.exe` và `node.exe` đang lắng nghe trên cổng 3000 và 8000, tránh tình trạng chiếm giữ cổng ngầm (Zombie process).
+- Kịch bản sẽ tự động giải phóng sạch sẽ các tiến trình đang lắng nghe trên cổng 5173 và 8000, tránh tình trạng chiếm giữ cổng ngầm (Zombie process).
 
 ---
 
@@ -169,7 +169,7 @@ flowchart LR
 
 ### 2.1. Đăng ký và Đăng nhập Cổng Dịch vụ công
 
-1. Mở trình duyệt web truy cập địa chỉ: `http://localhost:3000`.
+1. Mở trình duyệt web truy cập địa chỉ: `http://localhost:5173`.
 2. Màn hình đăng nhập xuất hiện:
    - Nếu đã có tài khoản: Nhập **Tên đăng nhập** (`congdan1`), **Mật khẩu** (`citizen123`), sau đó bấm **"Đăng Nhập Vào Hệ Thống"**.
    - Nếu chưa có tài khoản: Nhấp vào liên kết **"Đăng ký tài khoản công dân mới"** (`/register`), điền đầy đủ Họ và tên, Tên đăng nhập, Mật khẩu, Số điện thoại và Email. Tài khoản Công dân được hệ thống tự động kích hoạt ngay lập tức mà không cần phê duyệt thủ công.
@@ -263,7 +263,7 @@ flowchart TD
 
 ### 3.1. Đăng nhập phân hệ Cán bộ chuyên trách
 
-1. Truy cập `http://localhost:3000/login`.
+1. Truy cập `http://localhost:5173/login`.
 2. Đăng nhập bằng tài khoản cán bộ tương ứng với đơn vị của mình (Mật khẩu chung cho tất cả cán bộ kiểm thử là: `officer123`):
    - Cán bộ Giao thông: `canbo_gtvt`
    - Cán bộ Tài nguyên Môi trường: `canbo_tnmt`
@@ -272,7 +272,7 @@ flowchart TD
    - Cán bộ Giáo dục: `canbo_gddt`
    - Cán bộ Lao động Thương binh Xã hội: `canbo_ldtbxh`
    - Cán bộ Công an Tỉnh: `canbo_congan`
-   - Cán bộ Một cửa cấp Huyện: `canbo_motcua`
+   - Chuyên viên Tiếp công dân: `canbo_motcua`
 3. Sau khi xác thực thành công, hệ thống tự động đưa cán bộ vào giao diện chuyên biệt **Bàn Làm Việc Cán Bộ Thụ Lý** (`/officer`).
 
 ---

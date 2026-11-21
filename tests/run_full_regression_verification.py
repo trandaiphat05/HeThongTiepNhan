@@ -176,14 +176,15 @@ def run_regression():
         time.sleep(1.0)
 
         # Anti-double-submit click test
-        submit_btn = page.locator("button:has-text('Gửi Đơn Thư')")
+        submit_btn = page.locator("button[type='submit']")
         submit_btn.click()
         # Verify disabled state
         is_submitting_locked = submit_btn.is_disabled() or "Đang gửi" in submit_btn.inner_text()
         record_test("P1-04b", "Chống Double-Submit (Nút Khóa Tức Thì)", "Disabled true", f"Trạng thái: locked={is_submitting_locked}", "PASS" if is_submitting_locked else "WARNING", "isSubmittingRef ngăn chặn gửi trùng lặp")
 
         # Wait for receipt
-        page.wait_for_selector(":text('Mã hồ sơ'), :text('Biên Nhận'), :text('Gửi Phản Ánh Thành Công')", timeout=25000)
+        receipt_el = page.locator("text='Biên Nhận Điện Tử • Tiếp Nhận Thành Công'")
+        receipt_el.wait_for(state="visible", timeout=30000)
         time.sleep(1.0)
         page.screenshot(path=str(RETEST_DIR / "retest_01_citizen_image_only_success.png"))
 

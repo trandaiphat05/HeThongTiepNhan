@@ -17,7 +17,7 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr :5173 ^| findstr LISTENING') 
 
 :: 2. Khởi chạy Backend FastAPI trong cửa sổ riêng
 echo [1/2] Đang khởi động Backend FastAPI (Port 8000)...
-start "Backend FastAPI (DongNai Civic Router)" cmd /k "title Backend FastAPI && cd /d %~dp0backend && \"%~dp0backend\venv\Scripts\python.exe\" -m uvicorn main:app --reload --host 0.0.0.0 --port 8000"
+start "Backend FastAPI (DongNai Civic Router)" cmd /k "title Backend FastAPI && cd /d %~dp0backend && .\venv\Scripts\python.exe -m uvicorn main:app --reload --host 0.0.0.0 --port 8000"
 
 :: Đợi 3 giây để Backend khởi tạo CSDL và Socket
 ping 127.0.0.1 -n 4 >nul

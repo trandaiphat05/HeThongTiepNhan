@@ -62,7 +62,7 @@ npm install
 # 3. Khởi chạy giao diện phát triển
 npm run dev
 ```
-- **Cổng Dịch vụ công & Bàn làm việc:** `http://localhost:3000`
+- **Cổng Dịch vụ công & Bàn làm việc:** `http://localhost:5173`
 
 ---
 

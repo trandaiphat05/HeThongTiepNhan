@@ -113,8 +113,8 @@ def test_streamlined_image_upload():
         print("   -> Đã bấm 'Gửi Đơn Thư'...")
 
         # Chờ modal biên nhận thành công xuất hiện
-        receipt_modal = page.locator("text='Tiếp Nhận Đơn Thư Thành Công'")
-        receipt_modal.wait_for(state="visible", timeout=20000)
+        receipt_modal = page.locator("text='Biên Nhận Điện Tử • Tiếp Nhận Thành Công'")
+        receipt_modal.wait_for(state="visible", timeout=25000)
         assert receipt_modal.is_visible(), "Không hiển thị biên nhận nộp đơn thành công!"
 
         tracking_code_el = page.locator("div.font-mono.font-black")

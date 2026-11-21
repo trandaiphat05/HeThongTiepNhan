@@ -68,15 +68,15 @@
       "code": "P1-04b",
       "title": "Chống Double-Submit (Nút Khóa Tức Thì)",
       "expected": "Disabled true",
-      "actual": "Trạng thái: locked=False",
-      "status": "WARNING",
+      "actual": "Trạng thái: locked=True",
+      "status": "PASS",
       "evidence": "isSubmittingRef ngăn chặn gửi trùng lặp"
     },
     {
       "code": "P1-04a",
       "title": "Công Dân Gửi Đơn Chỉ Bằng Ảnh Chụp",
       "expected": "Sinh mã hồ sơ thành công",
-      "actual": "Mã hồ sơ: ĐN-20261120-3444",
+      "actual": "Mã hồ sơ: ĐN-20261121-6428",
       "status": "PASS",
       "evidence": "Thành công tiếp nhận đơn ảnh viết tay không cần gõ chữ"
     },
@@ -84,7 +84,7 @@
       "code": "P1-02",
       "title": "Lưu Bền Vững Ngôi Sao Ưu Tiên Qua F5",
       "expected": "is_starred = True trong DB",
-      "actual": "Tìm thấy 1 đơn có is_starred=True trong SQL Server",
+      "actual": "Tìm thấy 3 đơn có is_starred=True trong SQL Server",
       "status": "PASS",
       "evidence": "PATCH /api/tickets/{id}/star lưu bền vững và render đúng sau F5"
     },
@@ -100,15 +100,15 @@
       "code": "P3-02",
       "title": "Phân Trang Gọn Kiểu Gmail Cho Inbox",
       "expected": "Hiển thị 1–15 trong số N",
-      "actual": "Thực tế: '1–15 trong số 15'",
+      "actual": "Thực tế: '1–15 trong số 31'",
       "status": "PASS",
       "evidence": "Thanh điều khiển phân trang Gmail [X–Y trong số Z] hoạt động mượt mà"
     },
     {
       "code": "P1-03",
       "title": "Thống Kê KPI Chuẩn Xác & Đủ Sở Đặc Thù",
-      "expected": "Total=61, Có Công An, Y Tế",
-      "actual": "Total API=61, CONG_AN_TINH=4, SO_YTE=4",
+      "expected": "Total=92, Có Công An, Y Tế",
+      "actual": "Total API=92, CONG_AN_TINH=4, SO_YTE=4",
       "status": "PASS",
       "evidence": "Phân bổ các Sở khớp 100% CSDL SQL Server và không đếm trùng"
     },
@@ -116,7 +116,7 @@
       "code": "P3-01",
       "title": "Bỏ Số Cứng 96% & Đổi Tên Chỉ Số AI",
       "expected": "Tỷ lệ định tuyến tự động thực tế",
-      "actual": "Hiển thị 89% từ DB thực tế",
+      "actual": "Hiển thị 91% từ DB thực tế",
       "status": "PASS",
       "evidence": "Không còn số cứng bịa đặt"
     },

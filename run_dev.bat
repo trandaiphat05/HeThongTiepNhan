@@ -15,7 +15,7 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr :5173 ^| findstr LISTENING') 
 )
 
 echo [1/2] Đang khởi động Backend FastAPI (Cổng 8000)...
-start "Backend FastAPI" cmd /k "cd /d %~dp0backend && \"%~dp0backend\venv\Scripts\python.exe\" -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+start "Backend FastAPI" cmd /k "title Backend FastAPI && cd /d %~dp0backend && .\venv\Scripts\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
 
 ping 127.0.0.1 -n 4 >nul
 

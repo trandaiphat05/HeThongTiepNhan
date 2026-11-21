@@ -78,14 +78,12 @@ def run_tests():
         assert history_link.count() > 0, "Thiếu liên kết [Lịch sử đơn của tôi] trên Sidebar"
         print("  ✓ PASS: Sidebar Công dân chỉ gồm đúng 3 mục chuẩn.")
 
-        # Check 4: Emoji removed from Camera and Gallery buttons
+        # Check 4: Camera button removed and streamlined upload area present
+        upload_label = page.locator("text='Tải ảnh lên từ thiết bị'")
+        assert upload_label.count() > 0, "Không tìm thấy nhãn 'Tải ảnh lên từ thiết bị'"
         camera_btn = page.locator("button:has-text('Chụp ảnh đơn')")
-        gallery_btn = page.locator("button:has-text('Chọn từ thư viện')")
-        camera_text = camera_btn.first.inner_text()
-        gallery_text = gallery_btn.first.inner_text()
-        assert "📷" not in camera_text, f"Vẫn còn emoji camera trong: {camera_text}"
-        assert "🖼️" not in gallery_text and "🖼" not in gallery_text, f"Vẫn còn emoji gallery trong: {gallery_text}"
-        print(f"  ✓ PASS: Nút ảnh sạch emoji: '{camera_text.strip()}' & '{gallery_text.strip()}' (Icon SVG chuẩn).")
+        assert camera_btn.count() == 0, "Nút 'Chụp ảnh đơn' vẫn còn xuất hiện!"
+        print("  ✓ PASS: Nút camera đã được loại bỏ, khung tải ảnh chuẩn thiết bị hiển thị hoàn hảo.")
 
         # Check 5: Click [Tra cứu mã hồ sơ] from Sidebar
         lookup_link.first.click()
